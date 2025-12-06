@@ -242,12 +242,17 @@
 
         // 2. GESTION DE LICENCIAS
         const VistaLicencias = () => {
-            const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoId: '' });
+            const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoId: '', detalleCobertura: '' });
 
             const agregar = () => {
                 if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos");
-                setLicencias([...licencias, { ...nueva, id: Date.now(), medicoId: parseInt(nueva.medicoId), reemplazoId: nueva.reemplazoId ? parseInt(nueva.reemplazoId) : null }]);
-                setNueva({ ...nueva, medicoId: '', reemplazoId: '' });
+                setLicencias([...licencias, { 
+                    ...nueva, 
+                    id: Date.now(), 
+                    medicoId: parseInt(nueva.medicoId), 
+                    reemplazoId: nueva.reemplazoId ? parseInt(nueva.reemplazoId) : null 
+                }]);
+                setNueva({ ...nueva, medicoId: '', reemplazoId: '', detalleCobertura: '' });
             };
 
             return (
@@ -264,14 +269,29 @@
                             </div>
                              <div>
                                 <label className="block text-sm font-medium text-gray-700">Motivo</label>
-                                <input type="text" className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})} />
+                                <select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}>
+                                    <option value="Vacaciones">Vacaciones</option>
+                                    <option value="Enfermedad">Enfermedad</option>
+                                    <option value="Licencia por Stress">Licencia por Stress</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Cubierto por (Opcional)</label>
+                                <label className="block text-sm font-medium text-gray-700">Reemplazo Principal (Sugerido)</label>
                                 <select className="w-full p-2 border rounded" value={nueva.reemplazoId} onChange={e => setNueva({...nueva, reemplazoId: e.target.value})}>
                                     <option value="">Sin definir / Varios</option>
                                     {medicos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                                 </select>
+                            </div>
+                            <div className="lg:col-span-3">
+                                <label className="block text-sm font-medium text-gray-700">Detalle Cobertura / Días (Aclarar qué día cubre cada reemplazo)</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-2 border rounded" 
+                                    placeholder="Ej: 4 y 5 Dr. Pérez, 6 Dra. Gómez..."
+                                    value={nueva.detalleCobertura || ''} 
+                                    onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} 
+                                />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Desde</label>
@@ -292,15 +312,25 @@
                                 const med = medicos.find(m => m.id === lic.medicoId);
                                 const reemplazo = lic.reemplazoId ? medicos.find(m => m.id === lic.reemplazoId) : null;
                                 return (
-                                    <li key={lic.id} className="py-4 flex justify-between items-center">
-                                        <div>
-                                            <p className="font-medium text-lg">{med ? med.nombre : 'Médico borrado'}</p>
-                                            <p className="text-sm text-gray-500">Del {lic.desde} al {lic.hasta} ({lic.motivo})</p>
-                                            {reemplazo && (
-                                                <p className="text-xs text-blue-600 font-semibold mt-1">↳ Cubierto por: {reemplazo.nombre}</p>
+                                    <li key={lic.id} className="py-4 flex flex-col gap-2">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-medium text-lg">{med ? med.nombre : 'Médico borrado'}</p>
+                                                <p className="text-sm text-gray-600 font-semibold">{lic.motivo}</p>
+                                                <p className="text-sm text-gray-500">Del {lic.desde} al {lic.hasta}</p>
+                                            </div>
+                                            <button onClick={() => setLicencias(licencias.filter(l => l.id !== lic.id))} className="text-red-500 text-sm hover:underline">Eliminar</button>
+                                        </div>
+                                        <div className="bg-gray-50 p-2 rounded text-sm">
+                                            <span className="font-bold text-blue-600 block mb-1">Cubierto por:</span>
+                                            {lic.detalleCobertura ? (
+                                                <p className="text-gray-800">{lic.detalleCobertura}</p>
+                                            ) : (
+                                                <p className="text-gray-500 italic">
+                                                    {reemplazo ? `Principal: ${reemplazo.nombre}` : 'Sin detalle especificado'}
+                                                </p>
                                             )}
                                         </div>
-                                        <button onClick={() => setLicencias(licencias.filter(l => l.id !== lic.id))} className="text-red-500 text-sm hover:underline">Eliminar</button>
                                     </li>
                                 );
                             })}
