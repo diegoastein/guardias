@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Guardias Pediátricas (Cloud Fix)</title>
+    <title>Gestor de Guardias Pediátricas (Cloud)</title>
     
     <!-- 1. React y ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -25,37 +25,19 @@
 
 <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
     const { useState, useEffect, useMemo } = React;
     const { jsPDF } = window.jspdf;
 
-    // ************************************************************************************************
-    // *** ZONA DE CONFIGURACIÓN FIREBASE (PEGAR AQUI TUS CLAVES)             ***
-    // ************************************************************************************************
-    
-    const firebaseConfig = {
-      apiKey: "AIzaSyB6AKWdDANzAjr5OHeskhT_KF_Gyco2fVY",
-  authDomain: "guardias-5c5d9.firebaseapp.com",
-  projectId: "guardias-5c5d9",
-  storageBucket: "guardias-5c5d9.firebasestorage.app",
-  messagingSenderId: "954058300552",
-  appId: "1:954058300552:web:00135945002743e223d33d"
-    };
-
-    // ************************************************************************************************
-
-    // --- INICIALIZACIÓN FIREBASE ---
-    let db, auth;
-    let firebaseReady = false;
-    
-    if (firebaseConfig.apiKey !== "TU_API_KEY") {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-        firebaseReady = true;
-    }
+    // --- CONFIGURACIÓN AUTOMÁTICA DEL ENTORNO ---
+    // Usamos las variables globales del sistema para garantizar la conexión
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     // --- ÍCONOS ---
     const IconWrapper = ({ children, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
@@ -93,88 +75,86 @@
     };
 
     function App() {
-        if (!firebaseReady) {
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                    <div className="max-w-md p-8 bg-white shadow rounded text-center">
-                        <h2 className="text-2xl font-bold text-red-600 mb-4">Configuración Requerida</h2>
-                        <p className="mb-4">Edita el HTML y pega tus credenciales de Firebase en la zona marcada.</p>
-                    </div>
-                </div>
-            );
-        }
-
         const [view, setView] = useState('calendario');
         const [currentDate, setCurrentDate] = useState(new Date());
         const [loadingPdf, setLoadingPdf] = useState(false);
         const [user, setUser] = useState(null);
 
-        // --- ESTADOS LOCALES ---
-        // IMPORTANTE: Inicializamos vacío para que Firebase sea la fuente de verdad.
-        // PERO: Si Firebase está vacío, no queremos perder lo local antes de migrar.
-        // Solución: No sincronizamos hacia localStorage.
+        // --- ESTADOS LOCALES (Sincronizados con Firebase) ---
         const [medicos, setMedicos] = useState([]);
         const [licencias, setLicencias] = useState([]);
         const [guardias, setGuardias] = useState({});
         const [plantilla, setPlantilla] = useState({});
 
-        // --- FIREBASE LISTENERS ---
-        useEffect(() => {
-            signInAnonymously(auth).then(u => setUser(u.user)).catch(e => console.error("Auth error", e));
+        // --- HELPER PARA RUTAS ---
+        const getCollectionPath = (name) => `artifacts/${appId}/public/data/${name}`;
 
-            const unsubMedicos = onSnapshot(collection(db, 'medicos'), (snap) => {
+        // --- FIREBASE LISTENERS (Solo después de Auth) ---
+        useEffect(() => {
+            const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (e) {
+                    console.error("Error en auth:", e);
+                }
+            };
+            initAuth();
+            const unsubscribeAuth = onAuthStateChanged(auth, (u) => setUser(u));
+            return () => unsubscribeAuth();
+        }, []);
+
+        useEffect(() => {
+            if (!user) return; // Esperar a tener usuario para conectar la DB
+
+            const unsubMedicos = onSnapshot(collection(db, getCollectionPath('medicos')), (snap) => {
                 const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
                 setMedicos(data);
-            });
-            const unsubLicencias = onSnapshot(collection(db, 'licencias'), (snap) => {
+            }, (error) => console.error("Error medicos:", error));
+
+            const unsubLicencias = onSnapshot(collection(db, getCollectionPath('licencias')), (snap) => {
                 const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
                 setLicencias(data);
-            });
-            const unsubGuardias = onSnapshot(collection(db, 'guardias'), (snap) => {
+            }, (error) => console.error("Error licencias:", error));
+
+            const unsubGuardias = onSnapshot(collection(db, getCollectionPath('guardias')), (snap) => {
                 const data = {}; snap.docs.forEach(d => { data[d.id] = d.data(); });
                 setGuardias(data);
-            });
-            const unsubPlantilla = onSnapshot(collection(db, 'plantilla'), (snap) => {
+            }, (error) => console.error("Error guardias:", error));
+
+            const unsubPlantilla = onSnapshot(collection(db, getCollectionPath('plantilla')), (snap) => {
                 const data = {}; snap.docs.forEach(d => { data[d.id] = d.data(); });
                 setPlantilla(data);
-            });
+            }, (error) => console.error("Error plantilla:", error));
 
             return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); };
-        }, []);
+        }, [user]);
 
         const medicosOrdenados = useMemo(() => {
             return [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre));
         }, [medicos]);
 
-        // --- WRAPPERS DB (PRESERVANDO IDs) ---
-        const dbAgregarMedico = async (medico) => { 
-            // Usamos setDoc con el ID del objeto para mantener consistencia en la migración
-            await setDoc(doc(db, 'medicos', String(medico.id)), medico); 
-        };
-        const dbEditarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
-        const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, 'medicos', String(id))); };
-
-        const dbAgregarLicencia = async (lic) => { await setDoc(doc(db, 'licencias', String(lic.id)), lic); };
-        const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, 'licencias', String(id))); };
-
-        const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, 'guardias', fechaStr), data); };
-        const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); };
+        // --- WRAPPERS DB (RUTAS CORREGIDAS) ---
+        const dbAgregarMedico = async (medico) => { await setDoc(doc(db, getCollectionPath('medicos'), String(medico.id)), medico); };
+        const dbEditarMedico = async (medico) => { await setDoc(doc(db, getCollectionPath('medicos'), String(medico.id)), medico); };
+        const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, getCollectionPath('medicos'), String(id))); };
+        const dbAgregarLicencia = async (lic) => { await setDoc(doc(db, getCollectionPath('licencias'), String(lic.id)), lic); };
+        const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, getCollectionPath('licencias'), String(id))); };
+        const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, getCollectionPath('guardias'), fechaStr), data); };
+        const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, getCollectionPath('plantilla'), diaIdx.toString()), data); };
 
         const dbBatchGuardias = async (nuevasGuardias) => {
             const batch = writeBatch(db);
-            Object.entries(nuevasGuardias).forEach(([fecha, data]) => {
-                const ref = doc(db, 'guardias', fecha);
-                batch.set(ref, data);
-            });
+            Object.entries(nuevasGuardias).forEach(([fecha, data]) => { batch.set(doc(db, getCollectionPath('guardias'), fecha), data); });
             await batch.commit();
         };
 
         const dbBatchPlantilla = async (nuevaPlantilla) => {
             const batch = writeBatch(db);
-            Object.entries(nuevaPlantilla).forEach(([dia, data]) => {
-                const ref = doc(db, 'plantilla', dia.toString());
-                batch.set(ref, data);
-            });
+            Object.entries(nuevaPlantilla).forEach(([dia, data]) => { batch.set(doc(db, getCollectionPath('plantilla'), dia.toString()), data); });
             await batch.commit();
         };
 
@@ -185,14 +165,10 @@
             const firstDay = new Date(year, month, 1).getDay(); 
             return { days, firstDay, month, year };
         };
-        const formatDate = (d, m, y) => { return `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`; };
+        const formatDate = (d, m, y) => `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`;
         const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
-        const estaDeLicencia = (medicoId, fechaStr) => {
-            return licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
-        };
-        const obtenerDetalleLicencia = (medicoId, fechaStr) => {
-            return licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
-        };
+        const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
+        const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const exportToPDF = (elementId, filename) => {
             const input = document.getElementById(elementId); if(!input) return;
             if (!window.html2canvas || !window.jspdf) { alert("Librerías cargando..."); return; }
@@ -212,25 +188,16 @@
 
         // --- VISTAS ---
         const VistaMedicos = () => {
-            const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true });
+             const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true });
             const [editingId, setEditingId] = useState(null);
             const [editForm, setEditForm] = useState({});
             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
             const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
             const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); };
             const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
-            
             return (
                 <div className="space-y-6">
-                    <Card>
-                        <h3 className="text-lg font-bold mb-4">Agregar Médico</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                            <div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div>
-                            <div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div>
-                            <div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div>
-                            <Button onClick={agregar}>Agregar</Button>
-                        </div>
-                    </Card>
+                    <Card><h3 className="text-lg font-bold mb-4">Agregar Médico</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div><div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div><div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div><Button onClick={agregar}>Agregar</Button></div></Card>
                     <Card><h3 className="text-lg font-bold mb-4">Plantel Actual ({medicos.length})</h3><div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{medicosOrdenados.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => borrar(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div></Card>
                 </div>
             );
@@ -245,25 +212,14 @@
             return (
                 <div className="space-y-6">
                     <Card className="bg-yellow-50 border border-yellow-200"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Licencias Activas</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias este mes.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</Card>
-                    <Card>
-                        <h3 className="text-lg font-bold mb-4">Registrar Licencia</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                            <div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
-                            <div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div>
-                            <div><label className="block text-sm text-gray-700">Reemplazo</label><select className="w-full p-2 border rounded" value={nueva.reemplazoId} onChange={e => setNueva({...nueva, reemplazoId: e.target.value})}><option value="">Varios</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
-                            <div className="lg:col-span-3"><label className="block text-sm text-gray-700">Detalle Cobertura</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div>
-                            <div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div>
-                            <div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div>
-                            <Button onClick={agregar}>Registrar</Button>
-                        </div>
-                    </Card>
+                    <Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm text-gray-700">Reemplazo</label><select className="w-full p-2 border rounded" value={nueva.reemplazoId} onChange={e => setNueva({...nueva, reemplazoId: e.target.value})}><option value="">Varios</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div className="lg:col-span-3"><label className="block text-sm text-gray-700">Detalle Cobertura</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card>
                     <Card><h3 className="text-lg font-bold mb-4">Historial</h3><ul className="divide-y divide-gray-200">{licencias.sort((a,b) => b.desde.localeCompare(a.desde)).map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); const reemplazo = lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId)) : null; return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : '?'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline">Eliminar</button></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{lic.detalleCobertura || (reemplazo ? reemplazo.nombre : 'Sin detalle')}</p></div></li>); })}</ul></Card>
                 </div>
             );
         };
 
-        const VistaBusqueda = () => { /* Logica igual, solo renderizado */ 
-            const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
+        const VistaBusqueda = () => { 
+             const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
             const buscar = () => {
                 if(!fechaDesde || !fechaHasta) return alert("Seleccione fechas");
                 const [y1, m1, d1] = fechaDesde.split('-').map(Number); const [y2, m2, d2] = fechaHasta.split('-').map(Number);
@@ -355,7 +311,6 @@
             const [selectedDay, setSelectedDay] = useState(null); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
             const firstDayVisual = (firstDay + 6) % 7;
-
             const aplicarPlantilla = () => {
                 if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
                 const nuevas = {};
@@ -366,7 +321,6 @@
                 }
                 dbBatchGuardias(nuevas);
             };
-
             const repetirSemanaAnterior = () => {
                 if (!confirm("¿Rellenar huecos con semana anterior?")) return;
                 const nuevas = {};
@@ -375,20 +329,14 @@
                     const hoy = new Date(year, month, d);
                     const fStrHoy = hoy.toISOString().split('T')[0];
                     if (guardias[fStrHoy]) continue; 
-                    
                     const atras = new Date(year, month, d - 7);
                     const fStrAtras = atras.toISOString().split('T')[0];
                     const gAtras = guardias[fStrAtras];
-                    
-                    if(gAtras) {
-                        nuevas[fStrHoy] = gAtras; 
-                        count++;
-                    }
+                    if(gAtras) { nuevas[fStrHoy] = gAtras; count++; }
                 }
                 dbBatchGuardias(nuevas);
                 alert(`Se completaron ${count} días.`);
             };
-
             const EditGuardiaModal = () => {
                 if (!selectedDay) return null;
                 const fechaStr = new Date(year, month, selectedDay).toISOString().split('T')[0];
@@ -414,21 +362,10 @@
                         </div>
                     );
                 };
-
                 return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                        <div className="bg-white rounded p-4 w-full max-w-3xl">
-                            <h3 className="font-bold mb-4">Editar {selectedDay}</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div>
-                                <div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div>
-                            </div>
-                            <div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}}>Guardar</Button></div>
-                        </div>
-                    </div>
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar {selectedDay}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}}>Guardar</Button></div></div></div>
                 );
             };
-
             const renderCell = (day) => {
                 const fStr = new Date(year, month, day).toISOString().split('T')[0];
                 const g = guardias[fStr];
@@ -437,24 +374,59 @@
                     if(!s || s.estado==='VACANTE') return <div className="w-2 h-2 bg-red-200 rounded mx-auto"></div>;
                     const m = medicos.find(x=>String(x.id)===String(s.medicoId));
                     const lic = m && estaDeLicencia(m.id, fStr);
-                    // Aumentamos tamaño de letra y negrita para legibilidad
                     return <div className={`truncate text-xs font-bold px-1 rounded ${lic?'bg-red-500 text-white': 'bg-green-200'} mb-[1px]`} title={m?m.nombre:'?'}>{lic?'⚠️ ':''}{m?m.nombre.split(' ').pop():'?'}</div>;
                 };
                 return <div className="flex flex-col h-full justify-end pb-1 gap-[1px]"><div className="grid grid-cols-2 gap-[1px]">{mini(g.dia1)}{mini(g.dia2)}</div><div className="h-[1px] bg-gray-200"></div><div className="grid grid-cols-2 gap-[1px]">{mini(g.noche1)}{mini(g.noche2)}</div></div>;
             };
-
             const blanks = Array(firstDayVisual).fill(null);
             const daysArray = Array.from({ length: days }, (_, i) => i + 1);
-
             return (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center"><div className="flex gap-2"><button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 bg-gray-200 rounded">←</button><h2 className="font-bold text-xl">{mesNombre}</h2><button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 bg-gray-200 rounded">→</button></div><div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div></div>
                     <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
-                    <div className="grid grid-cols-7 gap-1">
-                        {blanks.map((_,i)=><div key={`b${i}`} className="h-32 bg-gray-100 rounded"></div>)}
-                        {daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-32 border rounded bg-white relative hover:shadow cursor-pointer"><div className="absolute top-1 right-2 font-bold text-sm">{d}</div><div className="mt-6 h-full">{renderCell(d)}</div></div>)}
-                    </div>
+                    <div className="grid grid-cols-7 gap-1">{blanks.map((_,i)=><div key={`b${i}`} className="h-32 bg-gray-100 rounded"></div>)}{daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-32 border rounded bg-white relative hover:shadow cursor-pointer"><div className="absolute top-1 right-2 font-bold text-sm">{d}</div><div className="mt-6 h-full">{renderCell(d)}</div></div>)}</div>
                     {selectedDay && <EditGuardiaModal />}
+                </div>
+            );
+        };
+
+        const VistaReporte = () => { /* ... (Igual) ... */ 
+            const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
+            const vacantesPorDia = {}; const licenciasPorMedico = {}; 
+            const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+            const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
+            for (let d = 1; d <= 31; d++) {
+                const fechaObj = new Date(year, month, d); if (fechaObj.getMonth() !== month) break;
+                const fechaStr = fechaObj.toISOString().split('T')[0]; const diaSemanaIndex = fechaObj.getDay(); const nombreDia = diasSemanaNombres[diaSemanaIndex];
+                const g = guardias[fechaStr]; const p = plantilla[diaSemanaIndex]; 
+                if (!g) continue;
+                const analizarSlot = (actualSlot, templateSlot) => {
+                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
+                    const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
+                    const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : null;
+                    const receptor = prestador ? prestador : medicoActual; 
+                    const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
+                    let medicoOriginal = null;
+                    if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
+                    const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
+                    if (esVacanteOriginal) { if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; vacantesPorDia[nombreDia].push(item); } else if (medicoOriginal) { const nombreTitular = medicoOriginal.nombre; if (!licenciasPorMedico[nombreTitular]) licenciasPorMedico[nombreTitular] = []; licenciasPorMedico[nombreTitular].push(item); }
+                };
+                analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
+            }
+            const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
+            const conteoFacturacion = {}; const sumarAlTope = (lista) => { lista.forEach(item => { const peso = item.es24 ? 2 : 1; conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + peso; }); };
+            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { const procesados = procesarGrupo(vacantesPorDia[dia]); vacantesFinales[dia] = procesados; sumarAlTope(procesados); } });
+            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { const procesados = procesarGrupo(licenciasPorMedico[medico]); licenciasFinales[medico] = procesados; sumarAlTope(procesados); });
+            const excedidos = Object.entries(conteoFacturacion).filter(([id, cant]) => cant > 10);
+            const FilaReporte = ({ item }) => ( <tr className="border-b text-xs"><td className="border p-1 text-center">{item.fecha}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 font-medium">{item.receptor}</td></tr> );
+            const TablaGrupo = ({ items }) => ( <table className="w-full text-sm border-collapse border border-gray-400 mb-4"><thead><tr className="bg-gray-100 text-xs uppercase"><th className="border p-1 w-24">Fecha</th><th className="border p-1 w-16">12 hs<br/>Sem</th><th className="border p-1 w-16">24 hs<br/>Sem</th><th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th><th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th><th className="border p-1 text-left">Depositar en recibo de</th></tr></thead><tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody></table> );
+            return (
+                <div id="reporte-ministerio" className="space-y-8 bg-white p-8 min-h-screen">
+                    <div className="flex justify-between items-center mb-8 no-print"><h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2><Button onClick={() => exportToPDF('reporte-ministerio', `Guardias_${mesNombre}`)} variant="dark" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button></div>
+                    {excedidos.length > 0 && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 no-print"><p className="font-bold flex items-center gap-2"><AlertTriangle/> ALERTA DE FACTURACIÓN: Límite Excedido (>10)</p><ul className="list-disc pl-5 mt-2">{excedidos.map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return <li key={id}>{med ? med.nombre : '?'}: Tiene {cant} guardias (Máx 10).</li> })}</ul></div>}
+                    <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div>
+                    <div><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE CARGOS VACANTES</h3>{Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes.</p> : Object.entries(vacantesFinales).map(([dia, items]) => (<div key={dia} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4><TablaGrupo items={items} /></div>))}</div>
+                    <div className="mt-8"><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE LICENCIAS</h3>{Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de licencias.</p> : Object.entries(licenciasFinales).map(([medico, items]) => (<div key={medico} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {medico}</h4><TablaGrupo items={items} /></div>))}</div>
                 </div>
             );
         };
@@ -474,14 +446,62 @@
                 alert("Migración iniciada. Los datos aparecerán en breve.");
             };
 
+            const importarRespaldo = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                if (!confirm("⚠️ ¡ATENCIÓN! Al importar se SOBRESCRIBIRÁN o MEZCLARÁN los datos en Firebase con los del archivo.\n¿Estás seguro de continuar?")) {
+                    event.target.value = null; 
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const datos = JSON.parse(e.target.result);
+                        
+                        // Importación a Firebase usando Batch donde sea posible para eficiencia
+                        if(datos.medicos && Array.isArray(datos.medicos)) {
+                             datos.medicos.forEach(m => dbAgregarMedico(m));
+                        }
+                        if(datos.licencias && Array.isArray(datos.licencias)) {
+                             datos.licencias.forEach(l => dbAgregarLicencia(l));
+                        }
+                        if(datos.guardias) {
+                             await dbBatchGuardias(datos.guardias);
+                        }
+                        if(datos.plantilla) {
+                             await dbBatchPlantilla(datos.plantilla);
+                        }
+                        alert("¡Datos restaurados en la nube con éxito!");
+                    } catch (error) {
+                        console.error(error);
+                        alert("Error al leer el archivo o al subir a Firebase. Revisa la consola.");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
             return (
                 <div className="max-w-xl mx-auto space-y-6">
                     <Card className="border-l-4 border-blue-500">
-                        <h3 className="font-bold text-lg mb-2 flex gap-2"><CloudUpload/> Migración a la Nube</h3>
-                        <p className="text-sm text-gray-600 mb-4">Si venías usando la versión sin internet, usa este botón UNA SOLA VEZ para subir tus datos viejos a la nueva base de datos.</p>
-                        <Button onClick={subirDatosLocales} className="w-full">☁️ Subir Datos Locales a la Nube</Button>
+                        <h3 className="font-bold text-lg mb-2 flex gap-2"><CloudUpload/> Migración Local a Nube</h3>
+                        <p className="text-sm text-gray-600 mb-4">Usa este botón si tienes datos en este navegador que quieres subir a Firebase.</p>
+                        <Button onClick={subirDatosLocales} className="w-full">☁️ Subir Datos Locales</Button>
                     </Card>
-                    <div className="bg-yellow-50 p-4 rounded text-sm text-yellow-800">Nota: Al usar la nube, ya no necesitas hacer backups manuales, tus datos están seguros en Google.</div>
+
+                    <Card className="border-l-4 border-green-500">
+                        <h3 className="font-bold text-lg mb-2 flex gap-2"><Upload/> Restaurar desde Archivo</h3>
+                        <p className="text-sm text-gray-600 mb-4">Si tienes un archivo .json de respaldo, úsalo aquí para poblar la base de datos.</p>
+                        <label className="block w-full">
+                            <span className="bg-green-600 text-white hover:bg-green-700 px-4 py-2 rounded-md transition-colors font-medium cursor-pointer block text-center flex items-center justify-center gap-2">
+                                <Upload size={18}/> Seleccionar Archivo JSON
+                            </span>
+                            <input type="file" accept=".json" onChange={importarRespaldo} className="hidden" />
+                        </label>
+                    </Card>
+
+                    <div className="bg-yellow-50 p-4 rounded text-sm text-yellow-800">Nota: Al usar la nube, ya no necesitas hacer backups manuales frecuentes, pero puedes exportar desde la versión local si lo necesitas.</div>
                 </div>
             );
         };
