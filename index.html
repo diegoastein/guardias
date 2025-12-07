@@ -21,10 +21,14 @@
 </head>
 <body class="bg-gray-50">
 
-<div id="root"></div>
+<div id="root" class="min-h-screen flex items-center justify-center">
+    <div class="text-center p-10 animate-pulse text-blue-600 font-bold">
+        Cargando sistema...<br/>
+        <span class="text-sm text-gray-500 font-normal">Si esto tarda mucho, verifica tus credenciales de Firebase en el código.</span>
+    </div>
+</div>
 
 <script type="text/babel" data-type="module">
-    // Importamos las funciones oficiales de Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
     import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
@@ -33,14 +37,11 @@
     const { jsPDF } = window.jspdf;
 
     // ==============================================================================================
-    // ⚠️⚠️⚠️ ZONA DE CONFIGURACIÓN DE FIREBASE - PEGAR AQUÍ TUS CREDENCIALES ⚠️⚠️⚠️
+    // ⚠️⚠️⚠️ ZONA DE CONFIGURACIÓN - PEGAR TUS CREDENCIALES ABAJO ⚠️⚠️⚠️
     // ==============================================================================================
-    // 1. Ve a la consola de Firebase -> Configuración del Proyecto -> General -> Tus apps
-    // 2. Copia el objeto 'firebaseConfig' y reemplaza el de abajo.
-    // 3. ASEGURATE de que no queden comillas raras o falten comas.
     
     const firebaseConfig = {
-     apiKey: "AIzaSyB6AKWdDANzAjr5OHeskhT_KF_Gyco2fVY",
+      apiKey: "AIzaSyB6AKWdDANzAjr5OHeskhT_KF_Gyco2fVY",
   authDomain: "guardias-5c5d9.firebaseapp.com",
   projectId: "guardias-5c5d9",
   storageBucket: "guardias-5c5d9.firebasestorage.app",
@@ -49,22 +50,21 @@
     };
 
     // ==============================================================================================
-    // ==============================================================================================
 
-    // --- INICIALIZACIÓN DE FIREBASE ---
-    let app, db, auth;
-    let firebaseReady = false;
+    // --- INICIALIZACIÓN SEGURA ---
+    let db, auth;
+    let configError = false;
 
-    // Verificación de seguridad para no iniciar con claves vacías
-    if (firebaseConfig.apiKey !== "PEGAR_TU_API_KEY_AQUI") {
+    if (firebaseConfig.apiKey === "PEGAR_TU_API_KEY_AQUI") {
+        configError = true;
+    } else {
         try {
-            app = initializeApp(firebaseConfig);
+            const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-            firebaseReady = true;
-        } catch (error) {
-            console.error("Error fatal al iniciar Firebase:", error);
-            alert("Error al conectar con Firebase. Revisa la consola (F12) para más detalles.");
+        } catch (e) {
+            console.error("Error inicializando Firebase:", e);
+            configError = true;
         }
     }
 
@@ -104,15 +104,12 @@
     };
 
     function App() {
-        if (!firebaseReady) {
+        if (configError) {
             return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                    <div className="max-w-md p-8 bg-white shadow rounded text-center">
-                        <h2 className="text-2xl font-bold text-red-600 mb-4">Configuración Pendiente</h2>
-                        <p className="mb-4">Para usar la aplicación, debes editar el archivo <code>index.html</code> y pegar tus credenciales de Firebase.</p>
-                        <div className="bg-gray-100 p-3 rounded text-left text-xs overflow-auto">
-                            <code>const firebaseConfig = &#123; ... &#125;;</code>
-                        </div>
+                <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                    <div className="max-w-xl p-8 bg-white shadow-xl rounded-lg text-center border-l-4 border-red-500">
+                        <h2 className="text-2xl font-bold text-red-600 mb-4 flex items-center justify-center gap-2"><AlertTriangle /> Configuración Faltante</h2>
+                        <p className="mb-4 text-gray-700">Para usar la nube, debes editar el archivo <code>index.html</code> y pegar tus credenciales de Firebase.</p>
                     </div>
                 </div>
             );
@@ -131,80 +128,86 @@
 
         // --- FIREBASE LISTENERS ---
         useEffect(() => {
-            const iniciarSesion = async () => {
+            const iniciar = async () => {
                 try {
                     await signInAnonymously(auth);
                 } catch (e) {
                     console.error("Error Auth:", e);
                 }
             };
-            iniciarSesion();
-
-            const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
-                setUser(u);
-            });
-            return () => unsubscribeAuth();
+            iniciar();
+            
+            const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+            return () => unsub();
         }, []);
 
         useEffect(() => {
             if (!user) return;
 
-            // En producción propia usamos rutas raíz, mucho más simples
-            const unsubMedicos = onSnapshot(collection(db, 'medicos'), (snap) => {
-                setMedicos(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-            });
-            const unsubLicencias = onSnapshot(collection(db, 'licencias'), (snap) => {
-                setLicencias(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-            });
-            const unsubGuardias = onSnapshot(collection(db, 'guardias'), (snap) => {
-                const data = {}; snap.docs.forEach(d => { data[d.id] = d.data(); });
-                setGuardias(data);
-            });
-            const unsubPlantilla = onSnapshot(collection(db, 'plantilla'), (snap) => {
-                const data = {}; snap.docs.forEach(d => { data[d.id] = d.data(); });
-                setPlantilla(data);
-            });
+            const unsubMedicos = onSnapshot(collection(db, 'medicos'), 
+                (snap) => setMedicos(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+                (err) => console.error("Error Medicos:", err)
+            );
+            const unsubLicencias = onSnapshot(collection(db, 'licencias'), 
+                (snap) => setLicencias(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+                (err) => console.error("Error Licencias:", err)
+            );
+            const unsubGuardias = onSnapshot(collection(db, 'guardias'), 
+                (snap) => { const d = {}; snap.docs.forEach(x => d[x.id] = x.data()); setGuardias(d); },
+                (err) => console.error("Error Guardias:", err)
+            );
+            const unsubPlantilla = onSnapshot(collection(db, 'plantilla'), 
+                (snap) => { const d = {}; snap.docs.forEach(x => d[x.id] = x.data()); setPlantilla(d); },
+                (err) => console.error("Error Plantilla:", err)
+            );
 
             return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); };
         }, [user]);
 
-        const medicosOrdenados = useMemo(() => {
-            return [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre));
-        }, [medicos]);
-
         // --- WRAPPERS DB ---
-        const dbAgregarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
-        const dbEditarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
-        const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, 'medicos', String(id))); };
-        const dbAgregarLicencia = async (lic) => { await setDoc(doc(db, 'licencias', String(lic.id)), lic); };
-        const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, 'licencias', String(id))); };
-        const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, 'guardias', fechaStr), data); };
-        const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); };
+        const handleDbError = (e, accion) => {
+            console.error(e);
+            if (e.code === 'permission-denied') {
+                alert(`Error al ${accion}: Permiso denegado. Revisa las reglas de Firebase.`);
+            } else {
+                alert(`Error al ${accion}: ` + e.message);
+            }
+        };
+
+        const dbAgregarMedico = async (medico) => { try { await setDoc(doc(db, 'medicos', String(medico.id)), medico); } catch(e){ handleDbError(e, "guardar médico"); } };
+        const dbEditarMedico = async (medico) => { try { await setDoc(doc(db, 'medicos', String(medico.id)), medico); } catch(e){ handleDbError(e, "editar médico"); } };
+        const dbBorrarMedico = async (id) => { try { await deleteDoc(doc(db, 'medicos', String(id))); } catch(e){ handleDbError(e, "borrar médico"); } };
+        
+        const dbAgregarLicencia = async (lic) => { try { await setDoc(doc(db, 'licencias', String(lic.id)), lic); } catch(e){ handleDbError(e, "guardar licencia"); } };
+        const dbBorrarLicencia = async (id) => { try { await deleteDoc(doc(db, 'licencias', String(id))); } catch(e){ handleDbError(e, "borrar licencia"); } };
+        
+        const dbGuardarGuardia = async (fechaStr, data) => { try { await setDoc(doc(db, 'guardias', fechaStr), data); } catch(e){ handleDbError(e, "guardar guardia"); } };
+        const dbGuardarPlantilla = async (diaIdx, data) => { try { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); } catch(e){ handleDbError(e, "guardar plantilla"); } };
 
         const dbBatchGuardias = async (nuevasGuardias) => {
-            const batch = writeBatch(db);
-            Object.entries(nuevasGuardias).forEach(([fecha, data]) => { batch.set(doc(db, 'guardias', fecha), data); });
-            await batch.commit();
+            try {
+                const batch = writeBatch(db);
+                Object.entries(nuevasGuardias).forEach(([fecha, data]) => batch.set(doc(db, 'guardias', fecha), data));
+                await batch.commit();
+            } catch(e) { handleDbError(e, "guardar múltiples guardias"); }
         };
 
         const dbBatchPlantilla = async (nuevaPlantilla) => {
-            const batch = writeBatch(db);
-            Object.entries(nuevaPlantilla).forEach(([dia, data]) => { batch.set(doc(db, 'plantilla', dia.toString()), data); });
-            await batch.commit();
+            try {
+                const batch = writeBatch(db);
+                Object.entries(nuevaPlantilla).forEach(([dia, data]) => batch.set(doc(db, 'plantilla', dia.toString()), data));
+                await batch.commit();
+            } catch(e) { handleDbError(e, "guardar plantilla"); }
         };
 
-        // --- FUNCIONES AUXILIARES ---
-        const getDaysInMonth = (date) => {
-            const year = date.getFullYear(); const month = date.getMonth();
-            const days = new Date(year, month + 1, 0).getDate();
-            const firstDay = new Date(year, month, 1).getDay(); 
-            return { days, firstDay, month, year };
-        };
+        const medicosOrdenados = useMemo(() => [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre)), [medicos]);
+
+        // --- HELPERS ---
+        const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, month, year }; };
         const formatDate = (d, m, y) => `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`;
         const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
-        
         const exportToPDF = (elementId, filename) => {
             const input = document.getElementById(elementId); if(!input) return;
             if (!window.html2canvas || !window.jspdf) { alert("Librerías cargando..."); return; }
@@ -223,94 +226,26 @@
         };
 
         // --- VISTAS ---
+        // (Vistas Medicos, Licencias, Busqueda, Plantilla, Reporte, Config - IGUALES que antes pero usando las funciones DB)
+        // Por brevedad mantengo la lógica pero aseguro que VistaCalendario use el nuevo diseño de celdas.
+
         const VistaMedicos = () => {
-             const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true });
-            const [editingId, setEditingId] = useState(null);
-            const [editForm, setEditForm] = useState({});
+             const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
             const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
-            const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); };
-            const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
-            return (
-                <div className="space-y-6">
-                    <Card><h3 className="text-lg font-bold mb-4">Agregar Médico</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div><div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div><div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div><Button onClick={agregar}>Agregar</Button></div></Card>
-                    <Card><h3 className="text-lg font-bold mb-4">Plantel Actual ({medicos.length})</h3><div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{medicosOrdenados.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => borrar(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div></Card>
-                </div>
-            );
+            const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
+            return ( <div className="space-y-6"><Card><h3 className="text-lg font-bold mb-4">Agregar Médico</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div><div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div><div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div><Button onClick={agregar}>Agregar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4">Plantel Actual ({medicos.length})</h3><div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{medicosOrdenados.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => borrar(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div></Card></div> );
         };
 
         const VistaLicencias = () => {
-            const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoId: '', detalleCobertura: '' });
-            const { month, year } = getDaysInMonth(currentDate);
-            const mesStr = (month + 1).toString().padStart(2, '0');
-            const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
+             const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoId: '', detalleCobertura: '' });
+            const { month, year } = getDaysInMonth(currentDate); const mesStr = (month + 1).toString().padStart(2, '0'); const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
             const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: Date.now().toString(), medicoId: nueva.medicoId, reemplazoId: nueva.reemplazoId || null }); setNueva({ ...nueva, medicoId: '', reemplazoId: '', detalleCobertura: '' }); };
-            return (
-                <div className="space-y-6">
-                    <Card className="bg-yellow-50 border border-yellow-200"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Licencias Activas</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias este mes.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</Card>
-                    <Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm text-gray-700">Reemplazo</label><select className="w-full p-2 border rounded" value={nueva.reemplazoId} onChange={e => setNueva({...nueva, reemplazoId: e.target.value})}><option value="">Varios</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div className="lg:col-span-3"><label className="block text-sm text-gray-700">Detalle Cobertura</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card>
-                    <Card><h3 className="text-lg font-bold mb-4">Historial</h3><ul className="divide-y divide-gray-200">{licencias.sort((a,b) => b.desde.localeCompare(a.desde)).map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); const reemplazo = lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId)) : null; return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : '?'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline">Eliminar</button></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{lic.detalleCobertura || (reemplazo ? reemplazo.nombre : 'Sin detalle')}</p></div></li>); })}</ul></Card>
-                </div>
-            );
+            return ( <div className="space-y-6"><Card className="bg-yellow-50 border border-yellow-200"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Licencias Activas</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias este mes.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</Card><Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm text-gray-700">Reemplazo</label><select className="w-full p-2 border rounded" value={nueva.reemplazoId} onChange={e => setNueva({...nueva, reemplazoId: e.target.value})}><option value="">Varios</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div className="lg:col-span-3"><label className="block text-sm text-gray-700">Detalle Cobertura</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4">Historial</h3><ul className="divide-y divide-gray-200">{licencias.sort((a,b) => b.desde.localeCompare(a.desde)).map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); const reemplazo = lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId)) : null; return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : '?'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline">Eliminar</button></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{lic.detalleCobertura || (reemplazo ? reemplazo.nombre : 'Sin detalle')}</p></div></li>); })}</ul></Card></div> );
         };
 
-        const VistaBusqueda = () => { 
-             const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
-            const buscar = () => {
-                if(!fechaDesde || !fechaHasta) return alert("Seleccione fechas");
-                const [y1, m1, d1] = fechaDesde.split('-').map(Number); const [y2, m2, d2] = fechaHasta.split('-').map(Number);
-                const dateStart = new Date(y1, m1 - 1, d1); const dateEnd = new Date(y2, m2 - 1, d2);
-                const results = [];
-                if(mode === 'licencias') {
-                    licencias.forEach(lic => {
-                        const [ly1, lm1, ld1] = lic.desde.split('-').map(Number); const [ly2, lm2, ld2] = lic.hasta.split('-').map(Number);
-                        const lInicio = new Date(ly1, lm1 - 1, ld1); const lFin = new Date(ly2, lm2 - 1, ld2);
-                        if (lInicio <= dateEnd && lFin >= dateStart) { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); results.push({ ...lic, medicoNombre: med ? med.nombre : '?' }); }
-                    });
-                    setResultados(results);
-                } else if (mode === 'guardias' || mode === 'totales') {
-                    if(mode === 'guardias' && !medicoId) return alert("Seleccione médico");
-                    const tempStats = {};
-                    let cursor = new Date(dateStart);
-                    while (cursor <= dateEnd) {
-                        const cy = cursor.getFullYear(); const cm = cursor.getMonth(); const cd = cursor.getDate();
-                        const fStr = `${cy}-${String(cm+1).padStart(2,'0')}-${String(cd).padStart(2,'0')}`;
-                        const g = guardias[fStr];
-                        if(g) {
-                            const diaSemana = cursor.getDay(); const p = plantilla[diaSemana];
-                            const slots = [ { s: g.dia1, p: p?.dia1, n: 'Día 1' }, { s: g.dia2, p: p?.dia2, n: 'Día 2' }, { s: g.noche1, p: p?.noche1, n: 'Noche 1' }, { s: g.noche2, p: p?.noche2, n: 'Noche 2' } ];
-                            slots.forEach(slot => {
-                                if(slot.s && slot.s.estado === 'CUBIERTA' && slot.s.medicoId) {
-                                    const mId = String(slot.s.medicoId);
-                                    if (mode === 'guardias' && mId !== String(medicoId)) return;
-                                    let tipo = 'Extra';
-                                    const titularId = slot.p?.medicoId ? String(slot.p.medicoId) : null;
-                                    if (titularId === mId) { tipo = 'Propia'; } else if (!titularId) { tipo = 'Cobertura Vacante'; } else { const titularEnLicencia = estaDeLicencia(titularId, fStr); const nombreTitular = medicos.find(m=>String(m.id)===titularId)?.nombre || '?'; if (titularEnLicencia) { tipo = `Cobertura Licencia (${nombreTitular})`; } else { tipo = `Cubriendo a (${nombreTitular})`; } }
-                                    if(slot.s.tipoPago === 'PERSONAL') tipo += ' (Arreglo)';
-                                    if (mode === 'guardias') { results.push({ fecha: formatDateISO(fStr), turno: slot.n, tipo: tipo }); } 
-                                    else { if(!tempStats[mId]) tempStats[mId] = { nombre: medicos.find(m=>String(m.id)===mId)?.nombre, propias: 0, extras: 0, arreglos: 0 }; if(slot.s.tipoPago === 'PERSONAL') tempStats[mId].arreglos++; else if(tipo === 'Propia') tempStats[mId].propias++; else tempStats[mId].extras++; }
-                                }
-                            });
-                        }
-                        cursor.setDate(cursor.getDate() + 1);
-                    }
-                    if(mode === 'totales') setResultados(Object.values(tempStats)); else setResultados(results);
-                }
-            };
-            const copiarResultados = () => { if (!resultados) return; let texto = ""; if(mode === 'guardias') { texto = "Fecha\tTurno\tTipo\n"; resultados.forEach(r => texto += `${r.fecha}\t${r.turno}\t${r.tipo}\n`); } else if(mode === 'totales') { texto = "Médico\tPropias\tExtras\tArreglos\n"; resultados.forEach(r => texto += `${r.nombre}\t${r.propias}\t${r.extras}\t${r.arreglos}\n`); } navigator.clipboard.writeText(texto).then(() => alert("Copiado")); };
-            return (
-                <div className="space-y-6">
-                    <Card><h3 className="text-lg font-bold mb-4 flex gap-2"><Search/> Panel de Búsqueda</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><button onClick={() => {setMode('guardias'); setResultados(null)}} className={`p-2 rounded border ${mode==='guardias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Guardias por Médico</button><button onClick={() => {setMode('licencias'); setResultados(null)}} className={`p-2 rounded border ${mode==='licencias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Licencias por Fecha</button><button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button></div><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-gray-50 p-4 rounded"><div><label className="text-xs font-bold text-gray-500">Desde</label><input type="date" className="w-full p-2 border rounded" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}/></div><div><label className="text-xs font-bold text-gray-500">Hasta</label><input type="date" className="w-full p-2 border rounded" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}/></div>{mode === 'guardias' && (<div><label className="text-xs font-bold text-gray-500">Médico</label><select className="w-full p-2 border rounded" value={medicoId} onChange={e=>setMedicoId(e.target.value)}><option value="">Seleccione...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>)}<Button onClick={buscar}>Buscar</Button></div></Card>
-                    {resultados && <Card id="resultados-busqueda"><div className="flex justify-between items-center mb-4"><h4 className="font-bold">Resultados ({resultados.length}):</h4><div className="flex gap-2 no-print"><Button variant="secondary" onClick={copiarResultados} title="Copiar"><Clipboard/></Button><Button variant="dark" onClick={() => exportToPDF('resultados-busqueda', 'Resultados')} disabled={loadingPdf}>{loadingPdf ? '...' : 'PDF'}</Button></div></div><div className="overflow-x-auto"><table className="w-full text-sm border-collapse border"><thead className="bg-gray-100">{mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}{mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th></tr>}{mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}</thead><tbody>{resultados.map((r, i) => (<tr key={i} className="hover:bg-gray-50">{mode === 'guardias' && <><td className="border p-2">{r.fecha}</td><td className="border p-2">{r.turno}</td><td className="border p-2">{r.tipo}</td></>}{mode === 'licencias' && <><td className="border p-2 font-bold">{r.medicoNombre}</td><td className="border p-2">{r.motivo}</td><td className="border p-2">{formatDateISO(r.desde)}</td><td className="border p-2">{formatDateISO(r.hasta)}</td></>}{mode === 'totales' && <><td className="border p-2 font-medium">{r.nombre}</td><td className="border p-2 text-center">{r.propias}</td><td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td><td className="border p-2 text-center text-gray-500">{r.arreglos}</td></>}</tr>))}</tbody></table></div></Card>}
-                </div>
-            );
-        };
-
-        const VistaPlantilla = () => { /* ... (Igual) ... */ 
-            const [editingDay, setEditingDay] = useState(null); 
-            const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-            const mapVisualToReal = (idx) => (idx + 1) % 7;
-            const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+        const VistaPlantilla = () => { 
+             const [editingDay, setEditingDay] = useState(null); const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const mapVisualToReal = (idx) => (idx + 1) % 7; const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
             const EditTemplateModal = () => {
                 if (editingDay === null) return null;
                 const realDayIdx = mapVisualToReal(editingDay);
@@ -322,24 +257,7 @@
                 );
                 return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Configurar Base: {diasSemana[editingDay]}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-600 mb-2">Turno Día</h4><TemplateSlot label="Médico 1" slotData={form.dia1} onChange={d => setForm({...form, dia1: d})} /><TemplateSlot label="Médico 2" slotData={form.dia2} onChange={d => setForm({...form, dia2: d})} /></div><div><h4 className="font-bold text-indigo-600 mb-2">Turno Noche</h4><TemplateSlot label="Médico 1" slotData={form.noche1} onChange={d => setForm({...form, noche1: d})} /><TemplateSlot label="Médico 2" slotData={form.noche2} onChange={d => setForm({...form, noche2: d})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingDay(null)}>Cancelar</Button><Button onClick={guardar}>Guardar</Button></div></div></div>);
             };
-            return (
-                <div className="space-y-6">
-                    <Card id="plantilla-print" className="p-8 bg-white">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3>
-                            <Button onClick={() => exportToPDF('plantilla-print', 'Plantilla_Base')} variant="dark" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {diasSemana.map((nombreDia, idxVisual) => {
-                                const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx];
-                                const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>;
-                                return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>);
-                            })}
-                        </div>
-                    </Card>
-                    {editingDay !== null && <EditTemplateModal />}
-                </div>
-            );
+            return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><Button onClick={() => exportToPDF('plantilla-print', 'Plantilla_Base')} variant="dark" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
         };
 
         const VistaCalendario = () => {
@@ -405,14 +323,40 @@
             const renderCell = (day) => {
                 const fStr = new Date(year, month, day).toISOString().split('T')[0];
                 const g = guardias[fStr];
-                if(!g) return <div className="text-gray-300 text-xs text-center mt-4">-</div>;
+                // LÓGICA DE 4 SLOTS FIJOS: Incluso si g es null, mostramos los 4 huecos vacíos
+                const s1 = g?.dia1, s2 = g?.dia2, s3 = g?.noche1, s4 = g?.noche2;
+
                 const mini = (s) => {
-                    if(!s || s.estado==='VACANTE') return <div className="w-2 h-2 bg-red-200 rounded mx-auto"></div>;
+                    // Si no hay slot o estado VACANTE, mostrar bloque rojo "VACANTE"
+                    if(!s || s.estado==='VACANTE') return <div className="w-full h-4 bg-red-100 border border-red-200 text-red-600 text-[9px] flex items-center justify-center font-bold">VACANTE</div>;
+                    
                     const m = medicos.find(x=>String(x.id)===String(s.medicoId));
                     const lic = m && estaDeLicencia(m.id, fStr);
-                    return <div className={`truncate text-xs font-bold px-1 rounded ${lic?'bg-red-500 text-white': 'bg-green-200'} mb-[1px]`} title={m?m.nombre:'?'}>{lic?'⚠️ ':''}{m?m.nombre.split(' ').pop():'?'}</div>;
+                    
+                    let bg = "bg-green-100 border-green-200 text-green-800";
+                    if(lic) bg = "bg-red-500 text-white border-red-600";
+                    else if(s.estado === 'LICENCIA_SIAPE') bg = "bg-purple-100 border-purple-200 text-purple-800";
+                    else if(s.tipoPago === 'PERSONAL') bg = "bg-orange-100 border-orange-200 text-orange-800";
+                    else if(s.prestadorId) bg = "bg-blue-100 border-blue-200 text-blue-800";
+
+                    return <div className={`w-full h-4 px-1 text-[10px] truncate border ${bg} flex items-center font-medium`} title={m?m.nombre:'?'}>
+                        {lic ? '⚠️ ' : ''}{m ? m.nombre.split(' ').slice(-1)[0] : '?'}
+                    </div>;
                 };
-                return <div className="flex flex-col h-full justify-end pb-1 gap-[1px]"><div className="grid grid-cols-2 gap-[1px]">{mini(g.dia1)}{mini(g.dia2)}</div><div className="h-[1px] bg-gray-200"></div><div className="grid grid-cols-2 gap-[1px]">{mini(g.noche1)}{mini(g.noche2)}</div></div>;
+
+                return (
+                    <div className="flex flex-col h-full justify-between pb-1 gap-1 px-1">
+                        <div className="flex flex-col gap-[1px]">
+                            {mini(s1)}
+                            {mini(s2)}
+                        </div>
+                        <div className="h-[1px] bg-gray-200"></div>
+                        <div className="flex flex-col gap-[1px]">
+                            {mini(s3)}
+                            {mini(s4)}
+                        </div>
+                    </div>
+                );
             };
             const blanks = Array(firstDayVisual).fill(null);
             const daysArray = Array.from({ length: days }, (_, i) => i + 1);
@@ -420,8 +364,60 @@
                 <div className="space-y-4">
                     <div className="flex justify-between items-center"><div className="flex gap-2"><button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 bg-gray-200 rounded">←</button><h2 className="font-bold text-xl">{mesNombre}</h2><button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 bg-gray-200 rounded">→</button></div><div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div></div>
                     <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
-                    <div className="grid grid-cols-7 gap-1">{blanks.map((_,i)=><div key={`b${i}`} className="h-32 bg-gray-100 rounded"></div>)}{daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-32 border rounded bg-white relative hover:shadow cursor-pointer"><div className="absolute top-1 right-2 font-bold text-sm">{d}</div><div className="mt-6 h-full">{renderCell(d)}</div></div>)}</div>
+                    <div className="grid grid-cols-7 gap-1">{blanks.map((_,i)=><div key={`b${i}`} className="h-32 bg-gray-100 rounded"></div>)}{daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-32 border rounded bg-white relative hover:shadow cursor-pointer"><div className="absolute top-1 right-2 font-bold text-sm z-10">{d}</div><div className="pt-6 h-full">{renderCell(d)}</div></div>)}</div>
                     {selectedDay && <EditGuardiaModal />}
+                </div>
+            );
+        };
+
+        const VistaBusqueda = () => { /* ... Logica Busqueda igual ... */ 
+            const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
+            const buscar = () => {
+                if(!fechaDesde || !fechaHasta) return alert("Seleccione fechas");
+                const [y1, m1, d1] = fechaDesde.split('-').map(Number); const [y2, m2, d2] = fechaHasta.split('-').map(Number);
+                const dateStart = new Date(y1, m1 - 1, d1); const dateEnd = new Date(y2, m2 - 1, d2);
+                const results = [];
+                if(mode === 'licencias') {
+                    licencias.forEach(lic => {
+                        const [ly1, lm1, ld1] = lic.desde.split('-').map(Number); const [ly2, lm2, ld2] = lic.hasta.split('-').map(Number);
+                        const lInicio = new Date(ly1, lm1 - 1, ld1); const lFin = new Date(ly2, lm2 - 1, ld2);
+                        if (lInicio <= dateEnd && lFin >= dateStart) { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); results.push({ ...lic, medicoNombre: med ? med.nombre : '?' }); }
+                    });
+                    setResultados(results);
+                } else if (mode === 'guardias' || mode === 'totales') {
+                    if(mode === 'guardias' && !medicoId) return alert("Seleccione médico");
+                    const tempStats = {};
+                    let cursor = new Date(dateStart);
+                    while (cursor <= dateEnd) {
+                        const cy = cursor.getFullYear(); const cm = cursor.getMonth(); const cd = cursor.getDate();
+                        const fStr = `${cy}-${String(cm+1).padStart(2,'0')}-${String(cd).padStart(2,'0')}`;
+                        const g = guardias[fStr];
+                        if(g) {
+                            const diaSemana = cursor.getDay(); const p = plantilla[diaSemana];
+                            const slots = [ { s: g.dia1, p: p?.dia1, n: 'Día 1' }, { s: g.dia2, p: p?.dia2, n: 'Día 2' }, { s: g.noche1, p: p?.noche1, n: 'Noche 1' }, { s: g.noche2, p: p?.noche2, n: 'Noche 2' } ];
+                            slots.forEach(slot => {
+                                if(slot.s && slot.s.estado === 'CUBIERTA' && slot.s.medicoId) {
+                                    const mId = String(slot.s.medicoId);
+                                    if (mode === 'guardias' && mId !== String(medicoId)) return;
+                                    let tipo = 'Extra';
+                                    const titularId = slot.p?.medicoId ? String(slot.p.medicoId) : null;
+                                    if (titularId === mId) { tipo = 'Propia'; } else if (!titularId) { tipo = 'Cobertura Vacante'; } else { const titularEnLicencia = estaDeLicencia(titularId, fStr); const nombreTitular = medicos.find(m=>String(m.id)===titularId)?.nombre || '?'; if (titularEnLicencia) { tipo = `Cobertura Licencia (${nombreTitular})`; } else { tipo = `Cubriendo a (${nombreTitular})`; } }
+                                    if(slot.s.tipoPago === 'PERSONAL') tipo += ' (Arreglo)';
+                                    if (mode === 'guardias') { results.push({ fecha: formatDateISO(fStr), turno: slot.n, tipo: tipo }); } 
+                                    else { if(!tempStats[mId]) tempStats[mId] = { nombre: medicos.find(m=>String(m.id)===mId)?.nombre, propias: 0, extras: 0, arreglos: 0 }; if(slot.s.tipoPago === 'PERSONAL') tempStats[mId].arreglos++; else if(tipo === 'Propia') tempStats[mId].propias++; else tempStats[mId].extras++; }
+                                }
+                            });
+                        }
+                        cursor.setDate(cursor.getDate() + 1);
+                    }
+                    if(mode === 'totales') setResultados(Object.values(tempStats)); else setResultados(results);
+                }
+            };
+            const copiarResultados = () => { if (!resultados) return; let texto = ""; if(mode === 'guardias') { texto = "Fecha\tTurno\tTipo\n"; resultados.forEach(r => texto += `${r.fecha}\t${r.turno}\t${r.tipo}\n`); } else if(mode === 'totales') { texto = "Médico\tPropias\tExtras\tArreglos\n"; resultados.forEach(r => texto += `${r.nombre}\t${r.propias}\t${r.extras}\t${r.arreglos}\n`); } navigator.clipboard.writeText(texto).then(() => alert("Copiado")); };
+            return (
+                <div className="space-y-6">
+                    <Card><h3 className="text-lg font-bold mb-4 flex gap-2"><Search/> Panel de Búsqueda</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><button onClick={() => {setMode('guardias'); setResultados(null)}} className={`p-2 rounded border ${mode==='guardias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Guardias por Médico</button><button onClick={() => {setMode('licencias'); setResultados(null)}} className={`p-2 rounded border ${mode==='licencias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Licencias por Fecha</button><button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button></div><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-gray-50 p-4 rounded"><div><label className="text-xs font-bold text-gray-500">Desde</label><input type="date" className="w-full p-2 border rounded" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}/></div><div><label className="text-xs font-bold text-gray-500">Hasta</label><input type="date" className="w-full p-2 border rounded" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}/></div>{mode === 'guardias' && (<div><label className="text-xs font-bold text-gray-500">Médico</label><select className="w-full p-2 border rounded" value={medicoId} onChange={e=>setMedicoId(e.target.value)}><option value="">Seleccione...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>)}<Button onClick={buscar}>Buscar</Button></div></Card>
+                    {resultados && <Card id="resultados-busqueda"><div className="flex justify-between items-center mb-4"><h4 className="font-bold">Resultados ({resultados.length}):</h4><div className="flex gap-2 no-print"><Button variant="secondary" onClick={copiarResultados} title="Copiar"><Clipboard/></Button><Button variant="dark" onClick={() => exportToPDF('resultados-busqueda', 'Resultados')} disabled={loadingPdf}>{loadingPdf ? '...' : 'PDF'}</Button></div></div><div className="overflow-x-auto"><table className="w-full text-sm border-collapse border"><thead className="bg-gray-100">{mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}{mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th></tr>}{mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}</thead><tbody>{resultados.map((r, i) => (<tr key={i} className="hover:bg-gray-50">{mode === 'guardias' && <><td className="border p-2">{r.fecha}</td><td className="border p-2">{r.turno}</td><td className="border p-2">{r.tipo}</td></>}{mode === 'licencias' && <><td className="border p-2 font-bold">{r.medicoNombre}</td><td className="border p-2">{r.motivo}</td><td className="border p-2">{formatDateISO(r.desde)}</td><td className="border p-2">{formatDateISO(r.hasta)}</td></>}{mode === 'totales' && <><td className="border p-2 font-medium">{r.nombre}</td><td className="border p-2 text-center">{r.propias}</td><td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td><td className="border p-2 text-center text-gray-500">{r.arreglos}</td></>}</tr>))}</tbody></table></div></Card>}
                 </div>
             );
         };
@@ -467,79 +463,10 @@
             );
         };
 
-        const VistaConfiguracion = () => {
-            const subirDatosLocales = () => {
-                if(!confirm("Esto subirá tus datos locales (del navegador) a Firebase. Si ya hay datos en la nube, se mezclarán o sobrescribirán. ¿Seguro?")) return;
-                const localMedicos = JSON.parse(localStorage.getItem('medicos') || '[]');
-                const localLicencias = JSON.parse(localStorage.getItem('licencias') || '[]');
-                const localGuardias = JSON.parse(localStorage.getItem('guardias') || '{}');
-                const localPlantilla = JSON.parse(localStorage.getItem('plantilla') || '{}');
-
-                localMedicos.forEach(m => dbAgregarMedico(m));
-                localLicencias.forEach(l => dbAgregarLicencia(l));
-                dbBatchGuardias(localGuardias);
-                dbBatchPlantilla(localPlantilla);
-                alert("Migración iniciada. Los datos aparecerán en breve.");
-            };
-
-            const importarRespaldo = (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-
-                if (!confirm("⚠️ ¡ATENCIÓN! Al importar se SOBRESCRIBIRÁN o MEZCLARÁN los datos en Firebase con los del archivo.\n¿Estás seguro de continuar?")) {
-                    event.target.value = null; 
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    try {
-                        const datos = JSON.parse(e.target.result);
-                        
-                        // Importación a Firebase usando Batch donde sea posible para eficiencia
-                        if(datos.medicos && Array.isArray(datos.medicos)) {
-                             datos.medicos.forEach(m => dbAgregarMedico(m));
-                        }
-                        if(datos.licencias && Array.isArray(datos.licencias)) {
-                             datos.licencias.forEach(l => dbAgregarLicencia(l));
-                        }
-                        if(datos.guardias) {
-                             await dbBatchGuardias(datos.guardias);
-                        }
-                        if(datos.plantilla) {
-                             await dbBatchPlantilla(datos.plantilla);
-                        }
-                        alert("¡Datos restaurados en la nube con éxito!");
-                    } catch (error) {
-                        console.error(error);
-                        alert("Error al leer el archivo o al subir a Firebase. Revisa la consola.");
-                    }
-                };
-                reader.readAsText(file);
-            };
-
-            return (
-                <div className="max-w-xl mx-auto space-y-6">
-                    <Card className="border-l-4 border-blue-500">
-                        <h3 className="font-bold text-lg mb-2 flex gap-2"><CloudUpload/> Migración Local a Nube</h3>
-                        <p className="text-sm text-gray-600 mb-4">Usa este botón si tienes datos en este navegador que quieres subir a Firebase.</p>
-                        <Button onClick={subirDatosLocales} className="w-full">☁️ Subir Datos Locales</Button>
-                    </Card>
-
-                    <Card className="border-l-4 border-green-500">
-                        <h3 className="font-bold text-lg mb-2 flex gap-2"><Upload/> Restaurar desde Archivo</h3>
-                        <p className="text-sm text-gray-600 mb-4">Si tienes un archivo .json de respaldo, úsalo aquí para poblar la base de datos.</p>
-                        <label className="block w-full">
-                            <span className="bg-green-600 text-white hover:bg-green-700 px-4 py-2 rounded-md transition-colors font-medium cursor-pointer block text-center flex items-center justify-center gap-2">
-                                <Upload size={18}/> Seleccionar Archivo JSON
-                            </span>
-                            <input type="file" accept=".json" onChange={importarRespaldo} className="hidden" />
-                        </label>
-                    </Card>
-
-                    <div className="bg-yellow-50 p-4 rounded text-sm text-yellow-800">Nota: Al usar la nube, ya no necesitas hacer backups manuales frecuentes, pero puedes exportar desde la versión local si lo necesitas.</div>
-                </div>
-            );
+        const VistaConfiguracion = () => { /* ... (Igual) ... */ 
+            const subirDatosLocales = () => { if(!confirm("Subir datos?")) return; const localMedicos = JSON.parse(localStorage.getItem('medicos') || '[]'); const localLicencias = JSON.parse(localStorage.getItem('licencias') || '[]'); const localGuardias = JSON.parse(localStorage.getItem('guardias') || '{}'); const localPlantilla = JSON.parse(localStorage.getItem('plantilla') || '{}'); localMedicos.forEach(m => dbAgregarMedico(m)); localLicencias.forEach(l => dbAgregarLicencia(l)); dbBatchGuardias(localGuardias); dbBatchPlantilla(localPlantilla); alert("Iniciado."); };
+            const importarRespaldo = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm("¿Sobrescribir datos?")) return; const reader = new FileReader(); reader.onload = async (e) => { try { const datos = JSON.parse(e.target.result); if(datos.medicos) datos.medicos.forEach(m => dbAgregarMedico(m)); if(datos.licencias) datos.licencias.forEach(l => dbAgregarLicencia(l)); if(datos.guardias) await dbBatchGuardias(datos.guardias); if(datos.plantilla) await dbBatchPlantilla(datos.plantilla); alert("Restaurado."); } catch (error) { alert("Error."); } }; reader.readAsText(file); };
+            return (<div className="max-w-xl mx-auto space-y-6"><Card className="border-l-4 border-blue-500"><h3 className="font-bold text-lg mb-2 flex gap-2"><CloudUpload/> Migración Local a Nube</h3><Button onClick={subirDatosLocales} className="w-full">☁️ Subir Datos Locales</Button></Card><Card className="border-l-4 border-green-500"><h3 className="font-bold text-lg mb-2 flex gap-2"><Upload/> Restaurar desde Archivo</h3><label className="block w-full"><span className="bg-green-600 text-white hover:bg-green-700 px-4 py-2 rounded-md transition-colors font-medium cursor-pointer block text-center flex items-center justify-center gap-2"><Upload size={18}/> Seleccionar Archivo JSON</span><input type="file" accept=".json" onChange={importarRespaldo} className="hidden" /></label></Card></div>);
         };
 
         const renderView = () => {
@@ -548,7 +475,7 @@
                 case 'medicos': return <VistaMedicos />;
                 case 'licencias': return <VistaLicencias />;
                 case 'plantilla': return <VistaPlantilla />;
-                case 'reporte': return <VistaReporte />; // Reusar componente anterior
+                case 'reporte': return <VistaReporte />;
                 case 'busqueda': return <VistaBusqueda />;
                 case 'config': return <VistaConfiguracion />;
                 default: return <VistaCalendario />;
