@@ -311,7 +311,11 @@
                 const TemplateSlot = ({ label, slotData, onChange }) => (
                     <div className="bg-gray-50 p-2 rounded border mb-2">
                         <div className="font-bold text-xs text-gray-600 mb-1">{label}</div>
-                        <select className="w-full p-1 border rounded text-sm mb-1" value={slotData.medicoId || ''} onChange={e => onChange({...slotData, estado: e.target.value ? 'CUBIERTA' : 'VACANTE', medicoId: e.target.value})}>
+                        <select 
+                            className="w-full p-1 border rounded text-sm mb-1" 
+                            value={slotData.medicoId || ''} 
+                            onChange={e => onChange({...slotData, estado: e.target.value ? 'CUBIERTA' : 'VACANTE', medicoId: e.target.value})}
+                        >
                             <option value="">-- Vacante --</option>
                             {medicos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                         </select>
@@ -391,28 +395,56 @@
             };
 
             const repetirSemanaAnterior = () => {
-                if (!confirm("Esto completará los días vacíos del mes copiando lo que haya pasado hace 7 días. ¿Continuar?")) return;
+                if (!confirm("Esta acción buscará HUECOS VACANTES en este mes y tratará de llenarlos con quien haya cubierto esa misma guardia la semana anterior.\n\n¿Continuar?")) return;
+                
                 const nuevasGuardias = { ...guardias };
                 let cambios = 0;
-                // Recorremos desde el día 1 (aunque para copiar hace falta mirar atrás, si es día 1 miramos mes anterior? 
-                // Simplificación: miramos dentro del mismo mes. Empezamos día 8.)
+                
+                // Recorremos el mes
                 for (let d = 1; d <= days; d++) {
                     const fechaHoy = new Date(year, month, d);
                     const fechaStrHoy = fechaHoy.toISOString().split('T')[0];
                     
-                    // Si hoy está vacío
+                    const fechaAtras = new Date(year, month, d - 7);
+                    const fechaStrAtras = fechaAtras.toISOString().split('T')[0];
+                    
+                    const gAtras = nuevasGuardias[fechaStrAtras];
+                    
+                    // Si no hay info de la semana anterior, no podemos copiar nada
+                    if (!gAtras) continue;
+
+                    // Si hoy no existe guardia, la inicializamos vacía para poder llenar slots
                     if (!nuevasGuardias[fechaStrHoy]) {
-                        // Buscamos 7 días atrás
-                        const fechaAtras = new Date(year, month, d - 7);
-                        const fechaStrAtras = fechaAtras.toISOString().split('T')[0];
-                        if (nuevasGuardias[fechaStrAtras]) {
-                            nuevasGuardias[fechaStrHoy] = JSON.parse(JSON.stringify(nuevasGuardias[fechaStrAtras]));
-                            cambios++;
-                        }
+                        const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+                        nuevasGuardias[fechaStrHoy] = { 
+                            dia1: {...defaultDia}, dia2: {...defaultDia}, 
+                            noche1: {...defaultDia}, noche2: {...defaultDia} 
+                        };
                     }
+                    
+                    const gHoy = nuevasGuardias[fechaStrHoy];
+                    
+                    // Función para copiar slot si corresponde
+                    const copiarSiVacio = (slotName) => {
+                        const sHoy = gHoy[slotName];
+                        const sAtras = gAtras[slotName];
+                        
+                        // Criterio: Hoy está VACANTE (o sin medico) Y Atrás estaba CUBIERTA con médico
+                        if ((!sHoy.medicoId || sHoy.estado === 'VACANTE') && sAtras && sAtras.estado === 'CUBIERTA' && sAtras.medicoId) {
+                            gHoy[slotName] = { ...sAtras }; // Copiamos el slot completo (médico, tipo pago, etc)
+                            return true;
+                        }
+                        return false;
+                    };
+
+                    if (copiarSiVacio('dia1')) cambios++;
+                    if (copiarSiVacio('dia2')) cambios++;
+                    if (copiarSiVacio('noche1')) cambios++;
+                    if (copiarSiVacio('noche2')) cambios++;
                 }
+                
                 setGuardias(nuevasGuardias);
-                alert(`Se completaron ${cambios} días basándose en la semana anterior.`);
+                alert(`Se rellenaron ${cambios} turnos vacantes usando datos de la semana anterior.`);
             };
 
             const SlotForm = ({ label, slotData, onChangeSlot, prestadoresDisponibles, fechaStr }) => { /* ... Mismo componente ... */ 
@@ -433,7 +465,9 @@
                                 <>
                                     <select className="w-full p-1 border rounded text-sm" value={data.medicoId || ''} onChange={e => onChangeSlot({...data, medicoId: e.target.value, derivado: false, prestadorId: ''})}>
                                         <option value="">-- Médico --</option>
-                                        {medicos.map(m => <option key={m.id} value={m.id}>{m.nombre} {estaDeLicencia(m.id, fechaStr) ? '(❌ Licencia)' : ''}</option>)}
+                                        {medicos.map(m => (
+                                            <option key={m.id} value={m.id}>{m.nombre} {estaDeLicencia(m.id, fechaStr) ? '(❌ Licencia)' : ''}</option>
+                                        ))}
                                     </select>
                                     {licenciaInfo && <div className="text-xs text-red-600 bg-red-50 p-1 rounded">⚠️ {licenciaInfo.motivo}</div>}
                                     <select className="w-full p-1 border rounded text-sm" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}>
