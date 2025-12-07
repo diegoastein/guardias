@@ -20,14 +20,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <style>
-        /* Scrollbars más estéticos */
+        /* Scrollbars más estéticos y funcionales para móvil */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* Asegurar que el calendario no se rompa en móviles */
-        .calendar-grid { min-width: 900px; } 
+        /* Forzar scroll suave en iOS */
+        .scroll-container {
+            -webkit-overflow-scrolling: touch;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -130,6 +132,7 @@
                 }
             };
             iniciar();
+            
             const unsub = onAuthStateChanged(auth, (u) => setUser(u));
             return () => unsub();
         }, []);
@@ -172,7 +175,6 @@
         const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
-        
         const exportToPDF = (elementId, filename) => {
             const input = document.getElementById(elementId); if(!input) return;
             setLoadingPdf(true);
@@ -190,15 +192,15 @@
         };
 
         // --- VISTAS ---
-        const VistaMedicos = () => { /* ... igual ... */ 
-            const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
+        const VistaMedicos = () => {
+             const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
             const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
             const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
             return ( <div className="space-y-6"><Card><h3 className="text-lg font-bold mb-4">Agregar Médico</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div><div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div><div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div><Button onClick={agregar}>Agregar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4">Plantel Actual ({medicos.length})</h3><div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{medicosOrdenados.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => borrar(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div></Card></div> );
         };
 
-        const VistaLicencias = () => { /* ... igual ... */ 
+        const VistaLicencias = () => {
              const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoId: '', detalleCobertura: '' });
             const { month, year } = getDaysInMonth(currentDate); const mesStr = (month + 1).toString().padStart(2, '0'); const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
             const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: Date.now().toString(), medicoId: nueva.medicoId, reemplazoId: nueva.reemplazoId || null }); setNueva({ ...nueva, medicoId: '', reemplazoId: '', detalleCobertura: '' }); };
@@ -292,7 +294,8 @@
                 const fStr = new Date(year, month, day).toISOString().split('T')[0];
                 const g = guardias[fStr];
                 
-                // SIEMPRE definimos los 4 slots, vacíos o no
+                // --- LÓGICA DE VISUALIZACIÓN MEJORADA ---
+                // Siempre mostramos 4 huecos. Si están vacíos, mostramos bloque rojo.
                 const slots = [
                     { data: g?.dia1, type: 'dia' },
                     { data: g?.dia2, type: 'dia' },
@@ -300,49 +303,53 @@
                     { data: g?.noche2, type: 'noche' }
                 ];
 
-                return (
-                    <div className="flex flex-col h-full gap-[2px] p-[2px]">
-                        {/* Seccion Dia */}
-                        <div className="flex flex-col gap-[1px] flex-1">
-                            {slots.slice(0, 2).map((s, i) => {
-                                // VACANTE VISIBLE
-                                if(!s.data || s.data.estado === 'VACANTE') return <div key={i} className="flex-1 bg-red-100 border border-red-200 text-red-600 text-[10px] font-bold flex items-center justify-center rounded">VACANTE</div>;
-                                
-                                const m = medicos.find(x => String(x.id) === String(s.data.medicoId));
-                                const lic = m && estaDeLicencia(m.id, fStr);
-                                
-                                let bg = "bg-green-100 border-green-200 text-green-800";
-                                if(lic) bg = "bg-red-500 text-white font-bold border-red-600";
-                                else if(s.data.estado === 'LICENCIA_SIAPE') bg = "bg-purple-100 border-purple-200 text-purple-800";
-                                else if(s.data.tipoPago === 'PERSONAL') bg = "bg-orange-100 border-orange-200 text-orange-800";
-                                else if(s.data.prestadorId) bg = "bg-blue-100 border-blue-200 text-blue-800";
+                const renderSlot = (slot, index) => {
+                    const isEmpty = !slot.data || slot.data.estado === 'VACANTE';
+                    
+                    if (isEmpty) {
+                        return (
+                            <div key={index} className="flex-1 bg-red-100 border border-red-300 text-red-600 text-xs font-bold flex items-center justify-center rounded-sm">
+                                VACANTE
+                            </div>
+                        );
+                    }
 
-                                return <div key={i} className={`flex-1 ${bg} text-[11px] px-1 border flex items-center truncate rounded leading-tight`} title={m ? m.nombre : '?'}>
-                                    {lic ? '⚠️ ' : ''}{m ? m.nombre.split(' ').slice(-1)[0] : '?'}
-                                </div>;
-                            })}
+                    const m = medicos.find(x => String(x.id) === String(slot.data.medicoId));
+                    const enLicencia = m && estaDeLicencia(m.id, fStr);
+                    
+                    let bgClass = "bg-green-100 border-green-300 text-green-900";
+                    let textClass = "";
+
+                    if (enLicencia) {
+                        bgClass = "bg-red-600 border-red-700 text-white font-bold";
+                    } else if (slot.data.estado === 'LICENCIA_SIAPE') {
+                        bgClass = "bg-purple-100 border-purple-300 text-purple-900";
+                    } else if (slot.data.tipoPago === 'PERSONAL') {
+                        bgClass = "bg-orange-100 border-orange-300 text-orange-900";
+                    } else if (slot.data.prestadorId) {
+                        bgClass = "bg-blue-100 border-blue-300 text-blue-900";
+                    }
+
+                    const displayName = m ? m.nombre.split(',')[0] : '?'; // Tomar solo apellido o primer nombre para que entre mejor
+
+                    return (
+                        <div key={index} className={`flex-1 ${bgClass} px-1 border rounded-sm flex items-center overflow-hidden whitespace-nowrap text-xs`} title={m ? m.nombre : '?'}>
+                            {enLicencia && <span className="mr-1">⚠️</span>}
+                            <span className="truncate">{displayName}</span>
                         </div>
-                        {/* Separador visual */}
-                        <div className="h-[1px] bg-gray-300 my-[1px]"></div>
-                        {/* Seccion Noche */}
-                        <div className="flex flex-col gap-[1px] flex-1">
-                            {slots.slice(2, 4).map((s, i) => {
-                                if(!s.data || s.data.estado === 'VACANTE') return <div key={i+2} className="flex-1 bg-red-100 border border-red-200 text-red-600 text-[10px] font-bold flex items-center justify-center rounded">VACANTE</div>;
-                                
-                                const m = medicos.find(x => String(x.id) === String(s.data.medicoId));
-                                const lic = m && estaDeLicencia(m.id, fStr);
-                                
-                                let bg = "bg-indigo-50 border-indigo-200 text-indigo-800"; // Tono noche por defecto
-                                if(lic) bg = "bg-red-500 text-white font-bold border-red-600";
-                                else if(s.data.estado === 'LICENCIA_SIAPE') bg = "bg-purple-100 border-purple-200 text-purple-800";
-                                else if(s.data.tipoPago === 'PERSONAL') bg = "bg-orange-100 border-orange-200 text-orange-800";
-                                else if(s.data.prestadorId) bg = "bg-blue-100 border-blue-200 text-blue-800";
-                                else bg = "bg-green-100 border-green-200 text-green-800"; // Si no es especial, verde standard
+                    );
+                };
 
-                                return <div key={i+2} className={`flex-1 ${bg} text-[11px] px-1 border flex items-center truncate rounded leading-tight`} title={m ? m.nombre : '?'}>
-                                    {lic ? '⚠️ ' : ''}{m ? m.nombre.split(' ').slice(-1)[0] : '?'}
-                                </div>;
-                            })}
+                return (
+                    <div className="flex flex-col h-full gap-1 p-1">
+                        <div className="flex flex-col gap-1 flex-1">
+                            {renderSlot(slots[0], 0)}
+                            {renderSlot(slots[1], 1)}
+                        </div>
+                        <div className="h-[2px] bg-gray-300"></div>
+                        <div className="flex flex-col gap-1 flex-1">
+                            {renderSlot(slots[2], 2)}
+                            {renderSlot(slots[3], 3)}
                         </div>
                     </div>
                 );
@@ -352,16 +359,18 @@
             return (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center"><div className="flex gap-2"><button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 bg-gray-200 rounded">←</button><h2 className="font-bold text-xl">{mesNombre}</h2><button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 bg-gray-200 rounded">→</button></div><div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div></div>
-                    {/* WRAPPER PARA SCROLL HORIZONTAL EN MOVIL */}
-                    <div className="overflow-x-auto pb-4">
-                        <div className="min-w-[800px]">
+                    
+                    {/* WRAPPER CON SCROLL HORIZONTAL Y ANCHO MÍNIMO FORZADO */}
+                    <div className="overflow-x-auto pb-4 w-full">
+                        <div className="min-w-[1200px]"> {/* Ancho forzado para que entren bien los nombres */}
                             <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
                             <div className="grid grid-cols-7 gap-1">
-                                {blanks.map((_,i)=><div key={`b${i}`} className="h-40 bg-gray-100 rounded"></div>)}
-                                {daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-40 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col"><div className="text-right text-sm font-bold p-1 bg-gray-50 border-b">{d}</div><div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div></div>)}
+                                {blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-100 rounded"></div>)}
+                                {daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col"><div className="text-right text-sm font-bold p-1 bg-gray-50 border-b">{d}</div><div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div></div>)}
                             </div>
                         </div>
                     </div>
+                    
                     {selectedDay && <EditGuardiaModal />}
                 </div>
             );
@@ -432,7 +441,7 @@
         return (
             <div className="min-h-screen pb-10 font-sans text-gray-900 bg-gray-50">
                 <nav className="bg-white shadow mb-6">
-                    <div className="w-full px-2 lg:px-6">
+                    <div className="w-full px-2 lg:px-4">
                         <div className="flex justify-between h-16">
                             <div className="flex items-center"><span className="font-bold text-xl text-blue-600 flex items-center gap-2"><Umbrella /> Guardias Cloud</span></div>
                             <div className="flex space-x-2 items-center overflow-x-auto">
@@ -447,7 +456,7 @@
                         </div>
                     </div>
                 </nav>
-                <main className="w-full px-2 lg:px-6">
+                <main className="w-full px-1 lg:px-4">
                     {!user ? <div className="text-center p-10">Conectando con base de datos segura...</div> : renderView()}
                 </main>
             </div>
