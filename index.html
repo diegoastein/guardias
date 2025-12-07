@@ -47,6 +47,7 @@
     const FileDown = () => <IconWrapper><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></IconWrapper>;
     const AlertTriangle = () => <IconWrapper className="text-red-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconWrapper>;
     const Search = () => <IconWrapper><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
+    const Clipboard = () => <IconWrapper><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
 
     // --- COMPONENTES UI ---
     const Card = ({ children, className = "", id="" }) => (
@@ -57,11 +58,11 @@
         const base = "px-4 py-2 rounded-md transition-colors font-medium flex items-center justify-center gap-2";
         const styles = {
             primary: "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300",
-            secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200",
+            secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400",
             danger: "bg-red-100 text-red-600 hover:bg-red-200",
             success: "bg-green-600 text-white hover:bg-green-700",
             warning: "bg-orange-500 text-white hover:bg-orange-600",
-            dark: "bg-gray-800 text-white hover:bg-gray-900",
+            dark: "bg-gray-800 text-white hover:bg-gray-900 disabled:bg-gray-600",
             icon: "p-2 hover:bg-gray-200 text-gray-600"
         };
         return (
@@ -75,6 +76,7 @@
     function App() {
         const [view, setView] = useState('calendario');
         const [currentDate, setCurrentDate] = useState(new Date());
+        const [loadingPdf, setLoadingPdf] = useState(false);
         
         // --- ESTADOS ---
         const [medicos, setMedicos] = useState(() => {
@@ -87,7 +89,6 @@
             ];
         });
 
-        // LISTA ORDENADA ALFABÉTICAMENTE
         const medicosOrdenados = useMemo(() => {
             return [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre));
         }, [medicos]);
@@ -150,29 +151,42 @@
             );
         };
 
+        // --- MOTOR DE EXPORTACIÓN PDF ---
         const exportToPDF = (elementId, filename) => {
             const input = document.getElementById(elementId);
             if(!input) return;
-            const buttons = input.querySelectorAll('button, .no-print');
-            buttons.forEach(b => b.style.visibility = 'hidden');
+            
+            setLoadingPdf(true); // Activar estado de carga
+            
+            // Usamos setTimeout para permitir que React renderice el estado de carga antes de bloquear con html2canvas
+            setTimeout(() => {
+                const buttons = input.querySelectorAll('button, .no-print');
+                buttons.forEach(b => b.style.visibility = 'hidden');
 
-            html2canvas(input, { 
-                scale: 3, 
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                logging: false
-            }).then((canvas) => {
-                const imgData = canvas.toDataURL('image/png');
-                const imgWidth = 210; 
-                const pageHeight = 295; 
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                let pdf;
-                if (imgHeight > pageHeight) { pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight + 20]); } 
-                else { pdf = new jsPDF('p', 'mm', 'a4'); }
-                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-                pdf.save(`${filename}.pdf`);
-                buttons.forEach(b => b.style.visibility = 'visible');
-            });
+                html2canvas(input, { 
+                    scale: 2, // Bajamos levemente para mejorar velocidad sin perder mucha calidad (era 3)
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false
+                }).then((canvas) => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgWidth = 210; 
+                    const pageHeight = 295; 
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    let pdf;
+                    if (imgHeight > pageHeight) { pdf = new jsPDF('p', 'mm', [imgWidth, imgHeight + 20]); } 
+                    else { pdf = new jsPDF('p', 'mm', 'a4'); }
+                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                    pdf.save(`${filename}.pdf`);
+                    buttons.forEach(b => b.style.visibility = 'visible');
+                    setLoadingPdf(false); // Desactivar carga
+                }).catch(err => {
+                    console.error(err);
+                    setLoadingPdf(false);
+                    alert("Error al generar PDF");
+                    buttons.forEach(b => b.style.visibility = 'visible');
+                });
+            }, 100);
         };
 
         // --- VISTAS ---
@@ -322,7 +336,6 @@
                                     if (titularId === mId) { tipo = 'Propia'; }
                                     else if (!titularId) { tipo = 'Cobertura Vacante'; }
                                     else {
-                                        // VERIFICACIÓN CORRECTA DE LICENCIA
                                         const titularEnLicencia = estaDeLicencia(titularId, fStr);
                                         const nombreTitular = medicos.find(m=>m.id===titularId)?.nombre || '?';
                                         if (titularEnLicencia) { tipo = `Cobertura Licencia (${nombreTitular})`; } 
@@ -343,6 +356,19 @@
                 }
             };
 
+            const copiarResultados = () => {
+                if (!resultados) return;
+                let texto = "";
+                if(mode === 'guardias') {
+                    texto = "Fecha\tTurno\tTipo\n";
+                    resultados.forEach(r => texto += `${r.fecha}\t${r.turno}\t${r.tipo}\n`);
+                } else if(mode === 'totales') {
+                    texto = "Médico\tPropias\tExtras\tArreglos\n";
+                    resultados.forEach(r => texto += `${r.nombre}\t${r.propias}\t${r.extras}\t${r.arreglos}\n`);
+                }
+                navigator.clipboard.writeText(texto).then(() => alert("Copiado al portapapeles"));
+            };
+
             return (
                 <div className="space-y-6">
                     <Card>
@@ -360,8 +386,14 @@
                         </div>
                     </Card>
                     {resultados && (
-                        <Card>
-                            <h4 className="font-bold mb-4">Resultados ({resultados.length}):</h4>
+                        <Card id="resultados-busqueda">
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="font-bold">Resultados ({resultados.length}):</h4>
+                                <div className="flex gap-2 no-print">
+                                    <Button variant="secondary" onClick={copiarResultados} title="Copiar Texto"><Clipboard/></Button>
+                                    <Button variant="dark" onClick={() => exportToPDF('resultados-busqueda', 'Resultados_Busqueda')} disabled={loadingPdf}>{loadingPdf ? 'Generando...' : 'Descargar PDF'}</Button>
+                                </div>
+                            </div>
                             {resultados.length === 0 ? <p className="text-gray-500 italic">No se encontraron datos.</p> : (
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm border-collapse border">
@@ -409,7 +441,7 @@
                     <Card id="plantilla-print" className="p-8 bg-white">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3>
-                            <Button onClick={() => exportToPDF('plantilla-print', 'Plantilla_Base')} variant="dark" className="text-sm"><FileDown size={16}/> Descargar PDF</Button>
+                            <Button onClick={() => exportToPDF('plantilla-print', 'Plantilla_Base')} variant="dark" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {diasSemana.map((nombreDia, idxVisual) => {
@@ -497,9 +529,18 @@
                 const renderMiniSlot = (slot) => {
                     if (!slot || slot.estado === 'VACANTE') return <div className="w-2 h-2 rounded-full bg-red-200 mx-auto"></div>;
                     const med = medicos.find(m => m.id == slot.medicoId);
+                    // CHECK FOR CONFLICT
+                    const enLicencia = med && estaDeLicencia(med.id, fechaStr);
+                    
                     let colorClass = "bg-green-200";
-                    if (slot.estado === 'LICENCIA_SIAPE') colorClass = "bg-purple-200"; else if (slot.tipoPago === 'PERSONAL') colorClass = "bg-orange-200"; else if (slot.prestadorId) colorClass = "bg-blue-200";
-                    return <div className={`w-full text-[10px] truncate px-1 rounded ${colorClass} mb-[1px]`} title={med ? med.nombre : '?'}>{med ? med.nombre.split(' ').pop() : '?'}</div>;
+                    if (enLicencia) colorClass = "bg-red-500 text-white font-bold";
+                    else if (slot.estado === 'LICENCIA_SIAPE') colorClass = "bg-purple-200"; 
+                    else if (slot.tipoPago === 'PERSONAL') colorClass = "bg-orange-200"; 
+                    else if (slot.prestadorId) colorClass = "bg-blue-200";
+                    
+                    return <div className={`w-full text-xs font-semibold truncate px-1 rounded ${colorClass} mb-[1px]`} title={med ? med.nombre : '?'}>
+                        {enLicencia ? '⚠️ ' : ''}{med ? med.nombre.split(' ').pop() : '?'}
+                    </div>;
                 };
                 return (<div className="flex flex-col h-full justify-end pb-1 gap-[2px]"><div className="grid grid-cols-2 gap-[2px]">{renderMiniSlot(g.dia1)}{renderMiniSlot(g.dia2)}</div><div className="h-[1px] bg-gray-100"></div><div className="grid grid-cols-2 gap-[2px]">{renderMiniSlot(g.noche1)}{renderMiniSlot(g.noche2)}</div></div>);
             };
@@ -511,7 +552,7 @@
                         <div className="flex items-center gap-2"><button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 hover:bg-gray-200 rounded">←</button><h2 className="text-xl font-bold capitalize">{mesNombre}</h2><button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 hover:bg-gray-200 rounded">→</button></div>
                         <div className="flex gap-2"><Button onClick={aplicarPlantilla} variant="warning" className="text-sm"><RefreshCw /> Aplicar Plantilla</Button><Button onClick={repetirSemanaAnterior} variant="primary" className="text-sm"><Copy /> Repetir Semana Ant.</Button></div>
                     </div>
-                    <div className="grid grid-cols-7 gap-1 md:gap-4 text-center">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d => <div key={d} className="font-bold text-gray-500 text-sm py-2">{d}</div>)}{blanks.map((_, i) => <div key={`blank-${i}`} className="h-24 md:h-32 bg-gray-50 rounded"></div>)}{daysArray.map(day => { const fechaStr = new Date(year, month, day).toISOString().split('T')[0]; return <div key={day} onClick={() => setSelectedDay(day)} className="h-24 md:h-32 border p-1 rounded cursor-pointer hover:shadow-md transition-shadow flex flex-col justify-between bg-white relative"><div className="font-bold text-right text-sm absolute top-1 right-2">{day}</div><div className="mt-5 h-full">{renderCellContent(fechaStr)}</div></div>; })}</div>
+                    <div className="grid grid-cols-7 gap-1 md:gap-4 text-center">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d => <div key={d} className="font-bold text-gray-500 text-sm py-2">{d}</div>)}{blanks.map((_, i) => <div key={`blank-${i}`} className="h-32 md:h-40 bg-gray-50 rounded"></div>)}{daysArray.map(day => { const fechaStr = new Date(year, month, day).toISOString().split('T')[0]; return <div key={day} onClick={() => setSelectedDay(day)} className="h-32 md:h-40 border p-1 rounded cursor-pointer hover:shadow-md transition-shadow flex flex-col justify-between bg-white relative"><div className="font-bold text-right text-sm absolute top-1 right-2">{day}</div><div className="mt-5 h-full">{renderCellContent(fechaStr)}</div></div>; })}</div>
                     {selectedDay && <EditGuardiaModal />}
                 </div>
             );
@@ -519,7 +560,8 @@
 
         const VistaReporte = () => {
             const { month, year } = getDaysInMonth(currentDate);
-            const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+            // CORRECTION: Remove year from mesNombre
+            const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
             
             const vacantesPorDia = {}; // { 'Lunes': [items], 'Martes': []... }
             const licenciasPorMedico = {}; // { 'Dr. Titular': [items] }
@@ -632,7 +674,10 @@
 
             return (
                 <div id="reporte-ministerio" className="space-y-8 bg-white p-8 min-h-screen">
-                    <div className="flex justify-between items-center mb-8 no-print"><h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2><Button onClick={() => exportToPDF('reporte-ministerio', `Guardias_${mesNombre}`)} variant="dark"><FileDown /> Descargar PDF</Button></div>
+                    <div className="flex justify-between items-center mb-8 no-print">
+                        <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2>
+                        <Button onClick={() => exportToPDF('reporte-ministerio', `Guardias_${mesNombre}`)} variant="dark" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button>
+                    </div>
                     {excedidos.length > 0 && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 no-print"><p className="font-bold flex items-center gap-2"><AlertTriangle/> ALERTA DE FACTURACIÓN: Límite Excedido (>10)</p><ul className="list-disc pl-5 mt-2">{excedidos.map(([id, cant]) => { const med = medicos.find(m => m.id == id); return <li key={id}>{med ? med.nombre : '?'}: Tiene {cant} guardias (Máx 10).</li> })}</ul></div>}
                     <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div>
                     
