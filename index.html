@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Guardias Pediátricas (Cloud)</title>
+    <title>Gestor de Guardias Pediátricas</title>
     
     <!-- 1. React y ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -24,21 +24,49 @@
 <div id="root"></div>
 
 <script type="text/babel" data-type="module">
+    // Importamos las funciones oficiales de Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    // CORRECCIÓN: signInWithCustomToken movido a auth
     import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
     const { useState, useEffect, useMemo } = React;
     const { jsPDF } = window.jspdf;
 
-    // --- CONFIGURACIÓN AUTOMÁTICA DEL ENTORNO ---
-    // Usamos las variables globales del sistema para garantizar la conexión
-    const firebaseConfig = JSON.parse(__firebase_config);
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    // ==============================================================================================
+    // ⚠️⚠️⚠️ ZONA DE CONFIGURACIÓN DE FIREBASE - PEGAR AQUÍ TUS CREDENCIALES ⚠️⚠️⚠️
+    // ==============================================================================================
+    // 1. Ve a la consola de Firebase -> Configuración del Proyecto -> General -> Tus apps
+    // 2. Copia el objeto 'firebaseConfig' y reemplaza el de abajo.
+    // 3. ASEGURATE de que no queden comillas raras o falten comas.
+    
+    const firebaseConfig = {
+     apiKey: "AIzaSyB6AKWdDANzAjr5OHeskhT_KF_Gyco2fVY",
+  authDomain: "guardias-5c5d9.firebaseapp.com",
+  projectId: "guardias-5c5d9",
+  storageBucket: "guardias-5c5d9.firebasestorage.app",
+  messagingSenderId: "954058300552",
+  appId: "1:954058300552:web:00135945002743e223d33d"
+    };
+
+    // ==============================================================================================
+    // ==============================================================================================
+
+    // --- INICIALIZACIÓN DE FIREBASE ---
+    let app, db, auth;
+    let firebaseReady = false;
+
+    // Verificación de seguridad para no iniciar con claves vacías
+    if (firebaseConfig.apiKey !== "PEGAR_TU_API_KEY_AQUI") {
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            firebaseReady = true;
+        } catch (error) {
+            console.error("Error fatal al iniciar Firebase:", error);
+            alert("Error al conectar con Firebase. Revisa la consola (F12) para más detalles.");
+        }
+    }
 
     // --- ÍCONOS ---
     const IconWrapper = ({ children, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
@@ -76,60 +104,66 @@
     };
 
     function App() {
+        if (!firebaseReady) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                    <div className="max-w-md p-8 bg-white shadow rounded text-center">
+                        <h2 className="text-2xl font-bold text-red-600 mb-4">Configuración Pendiente</h2>
+                        <p className="mb-4">Para usar la aplicación, debes editar el archivo <code>index.html</code> y pegar tus credenciales de Firebase.</p>
+                        <div className="bg-gray-100 p-3 rounded text-left text-xs overflow-auto">
+                            <code>const firebaseConfig = &#123; ... &#125;;</code>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         const [view, setView] = useState('calendario');
         const [currentDate, setCurrentDate] = useState(new Date());
         const [loadingPdf, setLoadingPdf] = useState(false);
         const [user, setUser] = useState(null);
 
-        // --- ESTADOS LOCALES (Sincronizados con Firebase) ---
+        // --- ESTADOS ---
         const [medicos, setMedicos] = useState([]);
         const [licencias, setLicencias] = useState([]);
         const [guardias, setGuardias] = useState({});
         const [plantilla, setPlantilla] = useState({});
 
-        // --- HELPER PARA RUTAS ---
-        const getCollectionPath = (name) => `artifacts/${appId}/public/data/${name}`;
-
-        // --- FIREBASE LISTENERS (Solo después de Auth) ---
+        // --- FIREBASE LISTENERS ---
         useEffect(() => {
-            const initAuth = async () => {
+            const iniciarSesion = async () => {
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+                    await signInAnonymously(auth);
                 } catch (e) {
-                    console.error("Error en auth:", e);
+                    console.error("Error Auth:", e);
                 }
             };
-            initAuth();
-            const unsubscribeAuth = onAuthStateChanged(auth, (u) => setUser(u));
+            iniciarSesion();
+
+            const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
+                setUser(u);
+            });
             return () => unsubscribeAuth();
         }, []);
 
         useEffect(() => {
-            if (!user) return; // Esperar a tener usuario para conectar la DB
+            if (!user) return;
 
-            const unsubMedicos = onSnapshot(collection(db, getCollectionPath('medicos')), (snap) => {
-                const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-                setMedicos(data);
-            }, (error) => console.error("Error medicos:", error));
-
-            const unsubLicencias = onSnapshot(collection(db, getCollectionPath('licencias')), (snap) => {
-                const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-                setLicencias(data);
-            }, (error) => console.error("Error licencias:", error));
-
-            const unsubGuardias = onSnapshot(collection(db, getCollectionPath('guardias')), (snap) => {
+            // En producción propia usamos rutas raíz, mucho más simples
+            const unsubMedicos = onSnapshot(collection(db, 'medicos'), (snap) => {
+                setMedicos(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+            });
+            const unsubLicencias = onSnapshot(collection(db, 'licencias'), (snap) => {
+                setLicencias(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+            });
+            const unsubGuardias = onSnapshot(collection(db, 'guardias'), (snap) => {
                 const data = {}; snap.docs.forEach(d => { data[d.id] = d.data(); });
                 setGuardias(data);
-            }, (error) => console.error("Error guardias:", error));
-
-            const unsubPlantilla = onSnapshot(collection(db, getCollectionPath('plantilla')), (snap) => {
+            });
+            const unsubPlantilla = onSnapshot(collection(db, 'plantilla'), (snap) => {
                 const data = {}; snap.docs.forEach(d => { data[d.id] = d.data(); });
                 setPlantilla(data);
-            }, (error) => console.error("Error plantilla:", error));
+            });
 
             return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); };
         }, [user]);
@@ -138,24 +172,24 @@
             return [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre));
         }, [medicos]);
 
-        // --- WRAPPERS DB (RUTAS CORREGIDAS) ---
-        const dbAgregarMedico = async (medico) => { await setDoc(doc(db, getCollectionPath('medicos'), String(medico.id)), medico); };
-        const dbEditarMedico = async (medico) => { await setDoc(doc(db, getCollectionPath('medicos'), String(medico.id)), medico); };
-        const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, getCollectionPath('medicos'), String(id))); };
-        const dbAgregarLicencia = async (lic) => { await setDoc(doc(db, getCollectionPath('licencias'), String(lic.id)), lic); };
-        const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, getCollectionPath('licencias'), String(id))); };
-        const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, getCollectionPath('guardias'), fechaStr), data); };
-        const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, getCollectionPath('plantilla'), diaIdx.toString()), data); };
+        // --- WRAPPERS DB ---
+        const dbAgregarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
+        const dbEditarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
+        const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, 'medicos', String(id))); };
+        const dbAgregarLicencia = async (lic) => { await setDoc(doc(db, 'licencias', String(lic.id)), lic); };
+        const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, 'licencias', String(id))); };
+        const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, 'guardias', fechaStr), data); };
+        const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); };
 
         const dbBatchGuardias = async (nuevasGuardias) => {
             const batch = writeBatch(db);
-            Object.entries(nuevasGuardias).forEach(([fecha, data]) => { batch.set(doc(db, getCollectionPath('guardias'), fecha), data); });
+            Object.entries(nuevasGuardias).forEach(([fecha, data]) => { batch.set(doc(db, 'guardias', fecha), data); });
             await batch.commit();
         };
 
         const dbBatchPlantilla = async (nuevaPlantilla) => {
             const batch = writeBatch(db);
-            Object.entries(nuevaPlantilla).forEach(([dia, data]) => { batch.set(doc(db, getCollectionPath('plantilla'), dia.toString()), data); });
+            Object.entries(nuevaPlantilla).forEach(([dia, data]) => { batch.set(doc(db, 'plantilla', dia.toString()), data); });
             await batch.commit();
         };
 
@@ -170,6 +204,7 @@
         const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
+        
         const exportToPDF = (elementId, filename) => {
             const input = document.getElementById(elementId); if(!input) return;
             if (!window.html2canvas || !window.jspdf) { alert("Librerías cargando..."); return; }
