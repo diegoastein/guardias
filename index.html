@@ -188,7 +188,7 @@
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         
-        // --- MOTOR PDF REVISADO (CHROMEBOOK FRIENDLY) ---
+        // --- MOTOR PDF REVISADO (SOLUCIÓN UNDEFINED Y CHROMBOOK) ---
         const exportToPDF = (elementId, filename) => {
             const input = document.getElementById(elementId); 
             if(!input) return;
@@ -205,15 +205,16 @@
             window.scrollTo(0, 0);
 
             setTimeout(() => {
-                const buttons = input.querySelectorAll('button, .no-print'); 
-                buttons.forEach(b => b.style.visibility = 'hidden');
-
-                // Escala reducida para dispositivos con menos memoria
+                // Usamos la opción ignoreElements de html2canvas en lugar de ocultar manualmente
+                // esto es más limpio y menos propenso a errores de DOM
                 window.html2canvas(input, { 
-                    scale: 1.5, // Reducido de 2 a 1.5 para Chromebooks
+                    scale: 2, 
                     useCORS: true, 
                     backgroundColor: '#ffffff',
-                    scrollY: -window.scrollY // Fix para scroll
+                    // Importante: ignorar botones dentro del canvas para que no salgan
+                    ignoreElements: (element) => {
+                        return element.tagName === 'BUTTON' || element.classList.contains('no-print');
+                    }
                 }).then((canvas) => {
                     const imgData = canvas.toDataURL('image/png');
                     const imgWidth = 210; 
@@ -226,12 +227,10 @@
                     pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
                     pdf.save(`${filename}.pdf`);
                     
-                    buttons.forEach(b => b.style.visibility = 'visible'); 
                     setLoadingPdf(false);
                 }).catch(err => { 
                     console.error("Error PDF:", err); 
                     setLoadingPdf(false); 
-                    buttons.forEach(b => b.style.visibility = 'visible'); 
                     alert("Error al generar PDF: " + (err.message || err));
                 });
             }, 500);
@@ -655,23 +654,34 @@
             }
             const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
             
-            // --- TABLA TOTALES: UNIDADES DE 12HS (12h=1, 24h=2) ---
+            // --- TABLA TOTALES: UNIDADES DE 12HS (12h=1, 24h=2) - CALCULO RAW ---
             const conteoFacturacion = {}; 
-            const sumarAlTope = (lista) => { 
-                lista.forEach(item => { 
-                    const peso = item.es24 ? 2 : 1; 
-                    conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + peso; 
-                }); 
+            // Función interna para sumar slots individuales
+            const sumarAlTopeRaw = (lista) => {
+                lista.forEach(item => {
+                    // Contamos 1 punto por cada slot de 12hs, independientemente de si se agrupa visualmente después
+                    conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1;
+                });
             };
+
+            // Usamos las listas sin agrupar para el conteo matemático
+            const vacantesRaw = [];
+            const licenciasRaw = [];
             
-            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { const procesados = procesarGrupo(vacantesPorDia[dia]); vacantesFinales[dia] = procesados; sumarAlTope(procesados); } });
-            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { const procesados = procesarGrupo(licenciasPorMedico[medico]); licenciasFinales[medico] = procesados; sumarAlTope(procesados); });
+            // Re-generamos listas planas para el conteo
+            Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista));
+            Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista));
+
+            sumarAlTopeRaw(vacantesRaw);
+            sumarAlTopeRaw(licenciasRaw);
+
+            // Ahora sí procesamos para visualización
+            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
+            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
             
             // Generar array de totales para mostrar
             const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
                 const med = medicos.find(m => String(m.id) === String(id));
-                // Contar cuántas son de 12 y cuántas de 24
-                // Esto es solo informativo, el 'cant' ya tiene el peso total
                 return { nombre: med ? med.nombre : '?', total: cant, id };
             }).sort((a,b) => b.total - a.total);
 
