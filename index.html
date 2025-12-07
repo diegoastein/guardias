@@ -107,6 +107,7 @@
     const Search = () => <IconWrapper><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
     const Clipboard = () => <IconWrapper><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
     const CloudUpload = () => <IconWrapper><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></IconWrapper>;
+    const CalendarIcon = () => <IconWrapper><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
 
     const Card = ({ children, className = "", id="" }) => <div id={id} className={`bg-white rounded-lg shadow p-4 ${className}`}>{children}</div>;
     const Button = ({ onClick, children, variant = "primary", className = "", disabled=false, title="" }) => {
@@ -231,7 +232,7 @@
                     console.error("Error PDF:", err); 
                     setLoadingPdf(false); 
                     buttons.forEach(b => b.style.visibility = 'visible'); 
-                    alert("Error al generar PDF: " + err.message);
+                    alert("Error al generar PDF: " + (err.message || err));
                 });
             }, 500);
         };
@@ -316,7 +317,17 @@
         const VistaLicencias = () => { /* ... igual ... */ 
              const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoIds: [], detalleCobertura: '' });
              const [filtroLicencias, setFiltroLicencias] = useState('');
-            const { month, year } = getDaysInMonth(currentDate); const mesStr = (month + 1).toString().padStart(2, '0'); const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
+            const { month, year } = getDaysInMonth(currentDate); 
+            const mesStr = (month + 1).toString().padStart(2, '0'); 
+            
+            // Calculo para el mes siguiente
+            const nextMonthDate = new Date(year, month + 1, 1);
+            const nextMonth = nextMonthDate.getMonth();
+            const nextYear = nextMonthDate.getFullYear();
+            const nextMesStr = (nextMonth + 1).toString().padStart(2, '0');
+
+            const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
+            const licenciasSiguienteMes = licencias.filter(lic => lic.desde.startsWith(`${nextYear}-${nextMesStr}`) || lic.hasta.startsWith(`${nextYear}-${nextMesStr}`));
             
             const toggleReemplazo = (id) => { setNueva(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
             const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: Date.now().toString(), medicoId: nueva.medicoId, reemplazoIds: nueva.reemplazoIds }); setNueva({ ...nueva, medicoId: '', reemplazoIds: [], detalleCobertura: '' }); };
@@ -327,14 +338,28 @@
                 return med && med.nombre.toLowerCase().includes(filtroLicencias.toLowerCase());
             }).sort((a,b) => b.desde.localeCompare(a.desde));
 
-            return ( <div className="space-y-6"><Card className="bg-yellow-50 border border-yellow-200"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Licencias Activas este Mes</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias este mes.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</Card>
+            return ( <div className="space-y-6">
+                    {/* PANEL DE LICENCIAS ACTUALES Y SIGUIENTES */}
+                    <Card className="border border-yellow-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-yellow-50 p-3 rounded">
+                                <h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Mes Actual ({currentDate.toLocaleString('es-ES', { month: 'long' })})</h3>
+                                {licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}
+                            </div>
+                            <div className="bg-blue-50 p-3 rounded">
+                                <h3 className="text-lg font-bold mb-2 text-blue-800 flex items-center gap-2"><CalendarIcon/> Mes Siguiente ({nextMonthDate.toLocaleString('es-ES', { month: 'long' })})</h3>
+                                {licenciasSiguienteMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias programadas.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasSiguienteMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}
+                            </div>
+                        </div>
+                    </Card>
+                    
                     <Card>
                         <h3 className="text-lg font-bold mb-4">Registrar Licencia</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
                             <div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
                             <div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div>
                             <div className="row-span-2"><label className="block text-sm text-gray-700 mb-1">Reemplazos Sugeridos (Selección Múltiple)</label><div className="border rounded p-2 h-32 overflow-y-auto bg-white">{medicosOrdenados.filter(m => m.tieneRecibo).map(m => (<label key={m.id} className="flex items-center gap-2 mb-1 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" checked={nueva.reemplazoIds.includes(m.id)} onChange={() => toggleReemplazo(m.id)}/>{m.nombre}</label>))}</div></div>
-                            <div className="lg:col-span-2"><label className="block text-sm text-gray-700">Detalle Cobertura (Texto libre)</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div>
+                            <div className="lg:col-span-2"><label className="block text-sm text-gray-700">Detalle Cobertura (Texto libre)</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez, 6 Dra. Gómez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div>
                             <div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div>
                             <div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div>
                             <Button onClick={agregar}>Registrar</Button>
