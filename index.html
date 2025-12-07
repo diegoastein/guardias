@@ -92,7 +92,7 @@
     const Sun = () => <IconWrapper className="text-orange-500"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></IconWrapper>;
     const LayoutTemplate = () => <IconWrapper><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></IconWrapper>;
     const RefreshCw = () => <IconWrapper><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
-    const Settings = () => <IconWrapper><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconWrapper>;
+    const Settings = () => <IconWrapper><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconWrapper>;
     const Save = () => <IconWrapper><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconWrapper>;
     const Download = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
     const Upload = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper>;
@@ -186,26 +186,54 @@
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         
+        // --- MOTOR PDF REVISADO ---
         const exportToPDF = (elementId, filename) => {
-            const input = document.getElementById(elementId); if(!input) return;
-            if (!window.html2canvas || !window.jspdf) { alert("Librerías cargando..."); return; }
+            const input = document.getElementById(elementId); 
+            if(!input) return;
+            
+            // Usamos window.jspdf.jsPDF directamente en el momento del click
+            if (!window.html2canvas || !window.jspdf) { 
+                alert("Las librerías de PDF aún no están listas. Por favor, espera unos segundos y vuelve a intentar."); 
+                return; 
+            }
+
             setLoadingPdf(true);
+            
+            // Forzamos un pequeño delay para asegurar que el DOM se actualice (ocultar botones)
             setTimeout(() => {
-                const buttons = input.querySelectorAll('button, .no-print'); buttons.forEach(b => b.style.visibility = 'hidden');
-                window.html2canvas(input, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then((canvas) => {
+                const buttons = input.querySelectorAll('button, .no-print'); 
+                buttons.forEach(b => b.style.visibility = 'hidden');
+
+                window.html2canvas(input, { 
+                    scale: 2, // Buena calidad sin colgar el navegador
+                    useCORS: true, 
+                    backgroundColor: '#ffffff'
+                }).then((canvas) => {
                     const imgData = canvas.toDataURL('image/png');
-                    const imgWidth = 210; const pageHeight = 295; const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    const imgWidth = 210; 
+                    const pageHeight = 295; 
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    // Instanciamos jsPDF aquí mismo para evitar errores de carga
                     const { jsPDF } = window.jspdf;
                     const pdf = new jsPDF('p', 'mm', imgHeight > pageHeight ? [imgWidth, imgHeight + 20] : 'a4');
+                    
                     pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
                     pdf.save(`${filename}.pdf`);
-                    buttons.forEach(b => b.style.visibility = 'visible'); setLoadingPdf(false);
-                }).catch(err => { console.error(err); setLoadingPdf(false); buttons.forEach(b => b.style.visibility = 'visible'); });
-            }, 100);
+                    
+                    buttons.forEach(b => b.style.visibility = 'visible'); 
+                    setLoadingPdf(false);
+                }).catch(err => { 
+                    console.error("Error PDF:", err); 
+                    setLoadingPdf(false); 
+                    buttons.forEach(b => b.style.visibility = 'visible'); 
+                    alert("Error al generar PDF. Intenta desde una PC si estás en celular.");
+                });
+            }, 500);
         };
 
         // --- VISTAS ---
-        const VistaMedicos = () => {
+        const VistaMedicos = () => { /* ... igual ... */
              const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
             const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
@@ -213,7 +241,7 @@
             return ( <div className="space-y-6"><Card><h3 className="text-lg font-bold mb-4">Agregar Médico</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div><div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div><div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div><Button onClick={agregar}>Agregar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4">Plantel Actual ({medicos.length})</h3><div className="w-scroll-container"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{medicosOrdenados.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => borrar(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div></Card></div> );
         };
 
-        const VistaLicencias = () => {
+        const VistaLicencias = () => { /* ... igual ... */ 
              const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoIds: [], detalleCobertura: '' });
              const [filtroLicencias, setFiltroLicencias] = useState('');
             const { month, year } = getDaysInMonth(currentDate); const mesStr = (month + 1).toString().padStart(2, '0'); const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
@@ -227,7 +255,7 @@
                 return med && med.nombre.toLowerCase().includes(filtroLicencias.toLowerCase());
             }).sort((a,b) => b.desde.localeCompare(a.desde));
 
-            return ( <div className="space-y-6"><Card className="bg-yellow-50 border border-yellow-200"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Licencias Activas este Mes</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</Card>
+            return ( <div className="space-y-6"><Card className="bg-yellow-50 border border-yellow-200"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Licencias Activas este Mes</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias este mes.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</Card>
                     <Card>
                         <h3 className="text-lg font-bold mb-4">Registrar Licencia</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
@@ -243,27 +271,32 @@
                     <Card><h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar en Historial</h3><div className="mb-4"><input type="text" className="w-full p-2 border rounded" placeholder="Buscar por nombre..." value={filtroLicencias} onChange={e => setFiltroLicencias(e.target.value)}/></div>{filtroLicencias.length > 0 ? (<ul className="divide-y divide-gray-200">{historialFiltrado.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); let replacementText = lic.detalleCobertura || (lic.reemplazoIds && lic.reemplazoIds.length > 0 ? lic.reemplazoIds.map(rid => medicos.find(m => String(m.id) === String(rid))?.nombre).join(', ') : (lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId))?.nombre : 'Sin detalle')); return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : '?'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline">Eliminar</button></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{replacementText}</p></div></li>); })}</ul>) : <p className="text-gray-400 italic text-center p-4">Escribe un nombre para buscar.</p>}</Card></div> );
         };
 
-        const VistaBusqueda = () => { /* ... igual ... */ 
+        const VistaBusqueda = () => { 
              const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
              
-             // Estado para edición en búsqueda de licencias
+             // --- LÓGICA DE EDICIÓN DE LICENCIAS ---
              const [editingLicenciaId, setEditingLicenciaId] = useState(null);
              const [editLicenciaForm, setEditLicenciaForm] = useState({});
 
              const startEditLicencia = (lic) => {
                  setEditingLicenciaId(lic.id);
-                 // Asegurar compatibilidad con datos viejos/nuevos
+                 // Compatible con datos viejos y nuevos
                  setEditLicenciaForm({
                      ...lic,
-                     reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : [])
+                     reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : []),
+                     detalleCobertura: lic.detalleCobertura || ''
                  });
              };
              
              const saveEditLicencia = async () => {
-                 await dbAgregarLicencia(editLicenciaForm); // setDoc sobrescribe
+                 await dbAgregarLicencia(editLicenciaForm); // Sobrescribe en DB
                  setEditingLicenciaId(null);
-                 // Refrescar búsqueda localmente (aunque el snapshot lo hará, esto es UX instantáneo)
-                 const updated = resultados.map(r => r.id === editLicenciaForm.id ? { ...editLicenciaForm, medicoNombre: medicos.find(m=>String(m.id)===String(editLicenciaForm.medicoId))?.nombre } : r);
+                 
+                 // Actualizar vista localmente para feedback instantáneo
+                 const updated = resultados.map(r => r.id === editLicenciaForm.id ? { 
+                     ...editLicenciaForm, 
+                     medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre 
+                 } : r);
                  setResultados(updated);
              };
 
@@ -280,6 +313,7 @@
                     });
                     setResultados(results);
                 } else if (mode === 'guardias' || mode === 'totales') {
+                    // ... (Misma lógica de búsqueda de guardias) ...
                     if(mode === 'guardias' && !medicoId) return alert("Seleccione médico");
                     const tempStats = {};
                     let cursor = new Date(dateStart);
@@ -315,14 +349,14 @@
                 <div className="space-y-6">
                     <Card><h3 className="text-lg font-bold mb-4 flex gap-2"><Search/> Panel de Búsqueda</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><button onClick={() => {setMode('guardias'); setResultados(null)}} className={`p-2 rounded border ${mode==='guardias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Guardias por Médico</button><button onClick={() => {setMode('licencias'); setResultados(null)}} className={`p-2 rounded border ${mode==='licencias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Licencias por Fecha</button><button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button></div><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-gray-50 p-4 rounded"><div><label className="text-xs font-bold text-gray-500">Desde</label><input type="date" className="w-full p-2 border rounded" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}/></div><div><label className="text-xs font-bold text-gray-500">Hasta</label><input type="date" className="w-full p-2 border rounded" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}/></div>{mode === 'guardias' && (<div><label className="text-xs font-bold text-gray-500">Médico</label><select className="w-full p-2 border rounded" value={medicoId} onChange={e=>setMedicoId(e.target.value)}><option value="">Seleccione...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>)}<Button onClick={buscar}>Buscar</Button></div></Card>
                     
-                    {/* MODAL DE EDICIÓN EN BÚSQUEDA */}
+                    {/* MODAL DE EDICIÓN (BÚSQUEDA) */}
                     {editingLicenciaId && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                             <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
                                 <h3 className="text-xl font-bold mb-4">Editar Licencia</h3>
                                 <div className="space-y-3">
                                     <div><label className="block text-sm font-medium">Médico</label><select className="w-full p-2 border rounded" value={editLicenciaForm.medicoId} onChange={e => setEditLicenciaForm({...editLicenciaForm, medicoId: e.target.value})}>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
-                                    <div><label className="block text-sm font-medium">Motivo</label><input className="w-full p-2 border rounded" value={editLicenciaForm.motivo} onChange={e => setEditLicenciaForm({...editLicenciaForm, motivo: e.target.value})} /></div>
+                                    <div><label className="block text-sm font-medium">Motivo</label><select className="w-full p-2 border rounded" value={editLicenciaForm.motivo} onChange={e => setEditLicenciaForm({...editLicenciaForm, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div>
                                     <div><label className="block text-sm font-medium">Desde</label><input type="date" className="w-full p-2 border rounded" value={editLicenciaForm.desde} onChange={e => setEditLicenciaForm({...editLicenciaForm, desde: e.target.value})} /></div>
                                     <div><label className="block text-sm font-medium">Hasta</label><input type="date" className="w-full p-2 border rounded" value={editLicenciaForm.hasta} onChange={e => setEditLicenciaForm({...editLicenciaForm, hasta: e.target.value})} /></div>
                                     <div><label className="block text-sm font-medium">Detalle Cobertura</label><input className="w-full p-2 border rounded" value={editLicenciaForm.detalleCobertura || ''} onChange={e => setEditLicenciaForm({...editLicenciaForm, detalleCobertura: e.target.value})} /></div>
@@ -337,7 +371,7 @@
             );
         };
 
-        const VistaPlantilla = () => { /* ... (Igual) ... */ 
+        const VistaPlantilla = () => { /* ... igual ... */ 
             const [editingDay, setEditingDay] = useState(null); const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const mapVisualToReal = (idx) => (idx + 1) % 7; const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
             const EditTemplateModal = () => {
                 if (editingDay === null) return null;
@@ -523,17 +557,53 @@
                 analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
             }
             const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
-            const conteoFacturacion = {}; const sumarAlTope = (lista) => { lista.forEach(item => { const peso = item.es24 ? 2 : 1; conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + peso; }); };
+            
+            // --- TABLA TOTALES: UNIDADES DE 12HS (12h=1, 24h=2) ---
+            const conteoFacturacion = {}; 
+            const sumarAlTope = (lista) => { 
+                lista.forEach(item => { 
+                    const peso = item.es24 ? 2 : 1; 
+                    conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + peso; 
+                }); 
+            };
+            
             const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { const procesados = procesarGrupo(vacantesPorDia[dia]); vacantesFinales[dia] = procesados; sumarAlTope(procesados); } });
             const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { const procesados = procesarGrupo(licenciasPorMedico[medico]); licenciasFinales[medico] = procesados; sumarAlTope(procesados); });
-            const excedidos = Object.entries(conteoFacturacion).filter(([id, cant]) => cant > 10);
+            
+            // Generar array de totales para mostrar
+            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
+                const med = medicos.find(m => String(m.id) === String(id));
+                // Contar cuántas son de 12 y cuántas de 24
+                // Esto es solo informativo, el 'cant' ya tiene el peso total
+                return { nombre: med ? med.nombre : '?', total: cant, id };
+            }).sort((a,b) => b.total - a.total);
+
             const FilaReporte = ({ item }) => ( <tr className="border-b text-xs"><td className="border p-1 text-center">{item.fecha}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 font-medium">{item.receptor}</td></tr> );
             const TablaGrupo = ({ items }) => ( <table className="w-full text-sm border-collapse border border-gray-400 mb-4"><thead><tr className="bg-gray-100 text-xs uppercase"><th className="border p-1 w-24">Fecha</th><th className="border p-1 w-16">12 hs<br/>Sem</th><th className="border p-1 w-16">24 hs<br/>Sem</th><th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th><th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th><th className="border p-1 text-left">Depositar en recibo de</th></tr></thead><tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody></table> );
+            
             return (
                 <div id="reporte-ministerio" className="space-y-8 bg-white p-8 min-h-screen w-scroll-container">
                     <div className="min-w-[800px]">
                         <div className="flex justify-between items-center mb-8 no-print"><h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2><Button onClick={() => exportToPDF('reporte-ministerio', `Guardias_${mesNombre}`)} variant="primary" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button></div>
-                        {excedidos.length > 0 && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 no-print"><p className="font-bold flex items-center gap-2"><AlertTriangle/> ALERTA DE FACTURACIÓN: Límite Excedido (>10)</p><ul className="list-disc pl-5 mt-2">{excedidos.map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return <li key={id}>{med ? med.nombre : '?'}: Tiene {cant} guardias (Máx 10).</li> })}</ul></div>}
+                        
+                        {/* TABLA DE TOTALES (NUEVA) */}
+                        <div className="mb-8 p-4 bg-gray-50 border rounded">
+                            <h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3>
+                            <table className="w-full text-sm border-collapse bg-white">
+                                <thead className="bg-gray-200"><tr><th className="border p-2 text-left">Médico</th><th className="border p-2 text-center">Total Unidades (12hs=1 / 24hs=2)</th><th className="border p-2 text-center">Estado</th></tr></thead>
+                                <tbody>
+                                    {totalesArray.map(t => (
+                                        <tr key={t.id} className={t.total > 10 ? "bg-red-100 font-bold text-red-700" : ""}>
+                                            <td className="border p-2">{t.nombre}</td>
+                                            <td className="border p-2 text-center">{t.total}</td>
+                                            <td className="border p-2 text-center">{t.total > 10 ? "EXCEDIDO" : "OK"}</td>
+                                        </tr>
+                                    ))}
+                                    {totalesArray.length === 0 && <tr><td colSpan="3" className="p-2 text-center italic">Sin datos.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+
                         <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div>
                         <div><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE CARGOS VACANTES</h3>{Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes.</p> : Object.entries(vacantesFinales).map(([dia, items]) => (<div key={dia} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4><TablaGrupo items={items} /></div>))}</div>
                         <div className="mt-8"><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE LICENCIAS</h3>{Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de licencias.</p> : Object.entries(licenciasFinales).map(([medico, items]) => (<div key={medico} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {medico}</h4><TablaGrupo items={items} /></div>))}</div>
