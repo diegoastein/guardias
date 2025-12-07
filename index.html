@@ -188,12 +188,11 @@
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         
-        // --- MOTOR PDF REVISADO (SOLUCIÓN UNDEFINED Y CHROMBOOK) ---
+        // --- MOTOR PDF REPARADO (CLONACIÓN DOM MANUAL) ---
         const exportToPDF = (elementId, filename) => {
             const input = document.getElementById(elementId); 
             if(!input) return;
             
-            // Verificación segura
             if (!window.html2canvas || !window.jspdf) { 
                 alert("Librerías PDF cargando... intenta de nuevo en unos segundos."); 
                 return; 
@@ -201,20 +200,31 @@
 
             setLoadingPdf(true);
             
-            // Scroll arriba para evitar cortes
-            window.scrollTo(0, 0);
+            // 1. Crear un clon para manipularlo sin afectar la vista actual
+            // Esto soluciona el "Unable to find element in cloned iframe" porque no usamos iframe
+            const clone = input.cloneNode(true);
+            
+            // 2. Configurar el clon para que se vea como en Desktop (ancho fijo A4 aprox)
+            clone.style.width = "1000px"; 
+            clone.style.position = "absolute";
+            clone.style.top = "-9999px";
+            clone.style.left = "0";
+            clone.style.background = "#ffffff";
+            clone.style.zIndex = "-1"; // Detrás de todo
+            
+            // 3. Limpiar el clon (quitar botones y elementos no imprimibles)
+            const buttons = clone.querySelectorAll('button, .no-print');
+            buttons.forEach(b => b.remove());
+            
+            // Adjuntar al body para que html2canvas lo pueda leer
+            document.body.appendChild(clone);
 
             setTimeout(() => {
-                // Usamos la opción ignoreElements de html2canvas en lugar de ocultar manualmente
-                // esto es más limpio y menos propenso a errores de DOM
-                window.html2canvas(input, { 
-                    scale: 2, 
+                window.html2canvas(clone, { 
+                    scale: 1.5, 
                     useCORS: true, 
                     backgroundColor: '#ffffff',
-                    // Importante: ignorar botones dentro del canvas para que no salgan
-                    ignoreElements: (element) => {
-                        return element.tagName === 'BUTTON' || element.classList.contains('no-print');
-                    }
+                    windowWidth: 1000 // Importante para simular desktop
                 }).then((canvas) => {
                     const imgData = canvas.toDataURL('image/png');
                     const imgWidth = 210; 
@@ -227,9 +237,11 @@
                     pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
                     pdf.save(`${filename}.pdf`);
                     
+                    document.body.removeChild(clone); // Limpieza
                     setLoadingPdf(false);
                 }).catch(err => { 
                     console.error("Error PDF:", err); 
+                    if(document.body.contains(clone)) document.body.removeChild(clone);
                     setLoadingPdf(false); 
                     alert("Error al generar PDF: " + (err.message || err));
                 });
@@ -242,20 +254,17 @@
              
              // --- ESTADOS PARA BÚSQUEDA ---
              const [filtroNombre, setFiltroNombre] = useState('');
-             const [listaMedicosVisible, setListaMedicosVisible] = useState(null); // Null = no mostrar nada al inicio
+             const [listaMedicosVisible, setListaMedicosVisible] = useState(null); 
 
              const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
              const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
              const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; 
              const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
              
-             // FUNCIÓN BUSCAR
              const buscarMedicos = () => {
                  if (filtroNombre.trim() === '') {
-                     // Si está vacío, mostrar TODOS (ordenados)
                      setListaMedicosVisible(medicosOrdenados);
                  } else {
-                     // Filtrar
                      const filtrados = medicosOrdenados.filter(m => m.nombre.toLowerCase().includes(filtroNombre.toLowerCase()));
                      setListaMedicosVisible(filtrados);
                  }
@@ -263,7 +272,6 @@
 
             return ( 
                 <div className="space-y-6">
-                    {/* PANEL DE AGREGAR */}
                     <Card>
                         <h3 className="text-lg font-bold mb-4">Agregar Médico</h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -274,7 +282,6 @@
                         </div>
                     </Card>
 
-                    {/* PANEL DE BÚSQUEDA Y LISTADO */}
                     <Card>
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar Médicos para Editar</h3>
                         <div className="flex gap-2 mb-4">
@@ -313,7 +320,7 @@
             );
         };
 
-        const VistaLicencias = () => { /* ... igual ... */ 
+        const VistaLicencias = () => { 
              const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoIds: [], detalleCobertura: '' });
              const [filtroLicencias, setFiltroLicencias] = useState('');
             const { month, year } = getDaysInMonth(currentDate); 
@@ -376,7 +383,6 @@
 
              const startEditLicencia = (lic) => {
                  setEditingLicenciaId(lic.id);
-                 // Compatible con datos viejos y nuevos
                  setEditLicenciaForm({
                      ...lic,
                      reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : []),
@@ -387,12 +393,7 @@
              const saveEditLicencia = async () => {
                  await dbAgregarLicencia(editLicenciaForm); // Sobrescribe en DB
                  setEditingLicenciaId(null);
-                 
-                 // Actualizar vista localmente para feedback instantáneo
-                 const updated = resultados.map(r => r.id === editLicenciaForm.id ? { 
-                     ...editLicenciaForm, 
-                     medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre 
-                 } : r);
+                 const updated = resultados.map(r => r.id === editLicenciaForm.id ? { ...editLicenciaForm, medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre } : r);
                  setResultados(updated);
              };
 
@@ -409,7 +410,6 @@
                     });
                     setResultados(results);
                 } else if (mode === 'guardias' || mode === 'totales') {
-                    // ... (Misma lógica de búsqueda de guardias) ...
                     if(mode === 'guardias' && !medicoId) return alert("Seleccione médico");
                     const tempStats = {};
                     let cursor = new Date(dateStart);
