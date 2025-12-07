@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gestor de Guardias Pediátricas</title>
     
     <!-- 1. React y ReactDOM -->
@@ -20,24 +20,38 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <style>
-        /* Scrollbars más estéticos y funcionales para móvil */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        /* Ajustes globales para evitar desbordes en móvil */
+        html, body { overflow-x: hidden; width: 100%; position: relative; }
+        
+        /* Scrollbars más estéticos */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* Forzar scroll suave en iOS */
-        .scroll-container {
+        /* Clases utilitarias personalizadas */
+        .w-scroll-container {
+            overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+            width: 100%;
+            padding-bottom: 0.5rem;
+        }
+        /* Grid responsiva que llena el espacio disponible */
+        .grid-responsive-fill {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 text-gray-900">
 
-<div id="root" class="min-h-screen flex items-center justify-center">
-    <div class="text-center p-10 animate-pulse text-blue-600 font-bold">
-        Cargando sistema...<br/>
-        <span class="text-sm text-gray-500 font-normal">Conectando a base de datos...</span>
+<div id="root" class="min-h-screen">
+    <div class="flex items-center justify-center h-screen">
+        <div class="text-center p-10 animate-pulse text-blue-600 font-bold">
+            Cargando sistema...<br/>
+            <span class="text-sm text-gray-500 font-normal">Conectando a base de datos...</span>
+        </div>
     </div>
 </div>
 
@@ -50,7 +64,7 @@
     const { jsPDF } = window.jspdf;
 
     // ==============================================================================================
-    // ⚠️ TUS CREDENCIALES REALES (Ya configuradas) ⚠️
+    // ⚠️ TUS CREDENCIALES REALES ⚠️
     // ==============================================================================================
     
     const firebaseConfig = {
@@ -72,7 +86,6 @@
         auth = getAuth(app);
     } catch (e) {
         console.error("Error inicializando Firebase:", e);
-        alert("Error de conexión. Revisa la consola.");
     }
 
     // --- ÍCONOS ---
@@ -82,7 +95,7 @@
     const Sun = () => <IconWrapper className="text-orange-500"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></IconWrapper>;
     const LayoutTemplate = () => <IconWrapper><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></IconWrapper>;
     const RefreshCw = () => <IconWrapper><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
-    const Settings = () => <IconWrapper><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconWrapper>;
+    const Settings = () => <IconWrapper><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconWrapper>;
     const Save = () => <IconWrapper><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconWrapper>;
     const Download = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
     const Upload = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper>;
@@ -105,7 +118,8 @@
             danger: "bg-red-100 text-red-600 hover:bg-red-200",
             success: "bg-green-600 text-white hover:bg-green-700",
             warning: "bg-orange-500 text-white hover:bg-orange-600",
-            dark: "bg-gray-800 text-white hover:bg-gray-900 disabled:bg-gray-600"
+            dark: "bg-gray-800 text-white hover:bg-gray-900 disabled:bg-gray-600",
+            icon: "p-2 hover:bg-gray-200 text-gray-600"
         };
         return <button onClick={onClick} disabled={disabled} className={`px-4 py-2 rounded-md transition-colors font-medium flex items-center justify-center gap-2 ${styles[variant]} ${className}`} title={title}>{children}</button>;
     };
@@ -116,7 +130,7 @@
         const [loadingPdf, setLoadingPdf] = useState(false);
         const [user, setUser] = useState(null);
 
-        // --- ESTADOS ---
+        // --- ESTADOS LOCALES ---
         const [medicos, setMedicos] = useState([]);
         const [licencias, setLicencias] = useState([]);
         const [guardias, setGuardias] = useState({});
@@ -149,24 +163,22 @@
         const medicosOrdenados = useMemo(() => [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre)), [medicos]);
 
         // --- WRAPPERS DB ---
-        const handleDbError = (e, accion) => {
-            console.error(e);
-            if (e.code === 'permission-denied') alert(`Error al ${accion}: Permiso denegado. Revisa las reglas de Firebase.`);
-            else alert(`Error al ${accion}: ` + e.message);
-        };
-        const dbAgregarMedico = async (medico) => { try { await setDoc(doc(db, 'medicos', String(medico.id)), medico); } catch(e){ handleDbError(e, "guardar"); } };
-        const dbEditarMedico = async (medico) => { try { await setDoc(doc(db, 'medicos', String(medico.id)), medico); } catch(e){ handleDbError(e, "editar"); } };
-        const dbBorrarMedico = async (id) => { try { await deleteDoc(doc(db, 'medicos', String(id))); } catch(e){ handleDbError(e, "borrar"); } };
-        const dbAgregarLicencia = async (lic) => { try { await setDoc(doc(db, 'licencias', String(lic.id)), lic); } catch(e){ handleDbError(e, "guardar"); } };
-        const dbBorrarLicencia = async (id) => { try { await deleteDoc(doc(db, 'licencias', String(id))); } catch(e){ handleDbError(e, "borrar"); } };
-        const dbGuardarGuardia = async (fechaStr, data) => { try { await setDoc(doc(db, 'guardias', fechaStr), data); } catch(e){ handleDbError(e, "guardar"); } };
-        const dbGuardarPlantilla = async (diaIdx, data) => { try { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); } catch(e){ handleDbError(e, "guardar"); } };
-        
+        const dbAgregarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
+        const dbEditarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
+        const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, 'medicos', String(id))); };
+        const dbAgregarLicencia = async (lic) => { await setDoc(doc(db, 'licencias', String(lic.id)), lic); };
+        const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, 'licencias', String(id))); };
+        const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, 'guardias', fechaStr), data); };
+        const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); };
         const dbBatchGuardias = async (nuevasGuardias) => {
-            try { const batch = writeBatch(db); Object.entries(nuevasGuardias).forEach(([fecha, data]) => batch.set(doc(db, 'guardias', fecha), data)); await batch.commit(); } catch(e) { handleDbError(e, "guardar múltiples"); }
+            const batch = writeBatch(db);
+            Object.entries(nuevasGuardias).forEach(([fecha, data]) => batch.set(doc(db, 'guardias', fecha), data));
+            await batch.commit();
         };
         const dbBatchPlantilla = async (nuevaPlantilla) => {
-            try { const batch = writeBatch(db); Object.entries(nuevaPlantilla).forEach(([dia, data]) => batch.set(doc(db, 'plantilla', dia.toString()), data)); await batch.commit(); } catch(e) { handleDbError(e, "guardar plantilla"); }
+            const batch = writeBatch(db);
+            Object.entries(nuevaPlantilla).forEach(([dia, data]) => batch.set(doc(db, 'plantilla', dia.toString()), data));
+            await batch.commit();
         };
 
         // --- HELPERS ---
@@ -197,7 +209,7 @@
             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
             const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
             const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
-            return ( <div className="space-y-6"><Card><h3 className="text-lg font-bold mb-4">Agregar Médico</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div><div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div><div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div><Button onClick={agregar}>Agregar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4">Plantel Actual ({medicos.length})</h3><div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{medicosOrdenados.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => borrar(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div></Card></div> );
+            return ( <div className="space-y-6"><Card><h3 className="text-lg font-bold mb-4">Agregar Médico</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div><div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div><div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div><Button onClick={agregar}>Agregar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4">Plantel Actual ({medicos.length})</h3><div className="w-scroll-container"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{medicosOrdenados.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => borrar(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div></Card></div> );
         };
 
         const VistaLicencias = () => {
@@ -211,10 +223,10 @@
              const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
             const buscar = () => { if(!fechaDesde || !fechaHasta) return alert("Seleccione fechas"); const [y1, m1, d1] = fechaDesde.split('-').map(Number); const [y2, m2, d2] = fechaHasta.split('-').map(Number); const dateStart = new Date(y1, m1 - 1, d1); const dateEnd = new Date(y2, m2 - 1, d2); const results = []; if(mode === 'licencias') { licencias.forEach(lic => { const [ly1, lm1, ld1] = lic.desde.split('-').map(Number); const [ly2, lm2, ld2] = lic.hasta.split('-').map(Number); const lInicio = new Date(ly1, lm1 - 1, ld1); const lFin = new Date(ly2, lm2 - 1, ld2); if (lInicio <= dateEnd && lFin >= dateStart) { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); results.push({ ...lic, medicoNombre: med ? med.nombre : '?' }); } }); setResultados(results); } else if (mode === 'guardias' || mode === 'totales') { if(mode === 'guardias' && !medicoId) return alert("Seleccione médico"); const tempStats = {}; let cursor = new Date(dateStart); while (cursor <= dateEnd) { const cy = cursor.getFullYear(); const cm = cursor.getMonth(); const cd = cursor.getDate(); const fStr = `${cy}-${String(cm+1).padStart(2,'0')}-${String(cd).padStart(2,'0')}`; const g = guardias[fStr]; if(g) { const diaSemana = cursor.getDay(); const p = plantilla[diaSemana]; const slots = [ { s: g.dia1, p: p?.dia1, n: 'Día 1' }, { s: g.dia2, p: p?.dia2, n: 'Día 2' }, { s: g.noche1, p: p?.noche1, n: 'Noche 1' }, { s: g.noche2, p: p?.noche2, n: 'Noche 2' } ]; slots.forEach(slot => { if(slot.s && slot.s.estado === 'CUBIERTA' && slot.s.medicoId) { const mId = String(slot.s.medicoId); if (mode === 'guardias' && mId !== String(medicoId)) return; let tipo = 'Extra'; const titularId = slot.p?.medicoId ? String(slot.p.medicoId) : null; if (titularId === mId) { tipo = 'Propia'; } else if (!titularId) { tipo = 'Cobertura Vacante'; } else { const titularEnLicencia = estaDeLicencia(titularId, fStr); const nombreTitular = medicos.find(m=>String(m.id)===titularId)?.nombre || '?'; if (titularEnLicencia) { tipo = `Cobertura Licencia (${nombreTitular})`; } else { tipo = `Cubriendo a (${nombreTitular})`; } } if(slot.s.tipoPago === 'PERSONAL') tipo += ' (Arreglo)'; if (mode === 'guardias') { results.push({ fecha: formatDateISO(fStr), turno: slot.n, tipo: tipo }); } else { if(!tempStats[mId]) tempStats[mId] = { nombre: medicos.find(m=>String(m.id)===mId)?.nombre, propias: 0, extras: 0, arreglos: 0 }; if(slot.s.tipoPago === 'PERSONAL') tempStats[mId].arreglos++; else if(tipo === 'Propia') tempStats[mId].propias++; else tempStats[mId].extras++; } } }); } cursor.setDate(cursor.getDate() + 1); } if(mode === 'totales') setResultados(Object.values(tempStats)); else setResultados(results); } };
             const copiarResultados = () => { if (!resultados) return; let texto = ""; if(mode === 'guardias') { texto = "Fecha\tTurno\tTipo\n"; resultados.forEach(r => texto += `${r.fecha}\t${r.turno}\t${r.tipo}\n`); } else if(mode === 'totales') { texto = "Médico\tPropias\tExtras\tArreglos\n"; resultados.forEach(r => texto += `${r.nombre}\t${r.propias}\t${r.extras}\t${r.arreglos}\n`); } navigator.clipboard.writeText(texto).then(() => alert("Copiado")); };
-            return ( <div className="space-y-6"><Card><h3 className="text-lg font-bold mb-4 flex gap-2"><Search/> Panel de Búsqueda</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><button onClick={() => {setMode('guardias'); setResultados(null)}} className={`p-2 rounded border ${mode==='guardias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Guardias por Médico</button><button onClick={() => {setMode('licencias'); setResultados(null)}} className={`p-2 rounded border ${mode==='licencias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Licencias por Fecha</button><button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button></div><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-gray-50 p-4 rounded"><div><label className="text-xs font-bold text-gray-500">Desde</label><input type="date" className="w-full p-2 border rounded" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}/></div><div><label className="text-xs font-bold text-gray-500">Hasta</label><input type="date" className="w-full p-2 border rounded" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}/></div>{mode === 'guardias' && (<div><label className="text-xs font-bold text-gray-500">Médico</label><select className="w-full p-2 border rounded" value={medicoId} onChange={e=>setMedicoId(e.target.value)}><option value="">Seleccione...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>)}<Button onClick={buscar}>Buscar</Button></div></Card>{resultados && <Card id="resultados-busqueda"><div className="flex justify-between items-center mb-4"><h4 className="font-bold">Resultados ({resultados.length}):</h4><div className="flex gap-2 no-print"><Button variant="secondary" onClick={copiarResultados} title="Copiar"><Clipboard/></Button><Button variant="dark" onClick={() => exportToPDF('resultados-busqueda', 'Resultados')} disabled={loadingPdf}>{loadingPdf ? '...' : 'PDF'}</Button></div></div><div className="overflow-x-auto"><table className="w-full text-sm border-collapse border"><thead className="bg-gray-100">{mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}{mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th></tr>}{mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}</thead><tbody>{resultados.map((r, i) => (<tr key={i} className="hover:bg-gray-50">{mode === 'guardias' && <><td className="border p-2">{r.fecha}</td><td className="border p-2">{r.turno}</td><td className="border p-2">{r.tipo}</td></>}{mode === 'licencias' && <><td className="border p-2 font-bold">{r.medicoNombre}</td><td className="border p-2">{r.motivo}</td><td className="border p-2">{formatDateISO(r.desde)}</td><td className="border p-2">{formatDateISO(r.hasta)}</td></>}{mode === 'totales' && <><td className="border p-2 font-medium">{r.nombre}</td><td className="border p-2 text-center">{r.propias}</td><td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td><td className="border p-2 text-center text-gray-500">{r.arreglos}</td></>}</tr>))}</tbody></table></div></Card>}</div> );
+            return ( <div className="space-y-6"><Card><h3 className="text-lg font-bold mb-4 flex gap-2"><Search/> Panel de Búsqueda</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><button onClick={() => {setMode('guardias'); setResultados(null)}} className={`p-2 rounded border ${mode==='guardias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Guardias por Médico</button><button onClick={() => {setMode('licencias'); setResultados(null)}} className={`p-2 rounded border ${mode==='licencias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Licencias por Fecha</button><button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button></div><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-gray-50 p-4 rounded"><div><label className="text-xs font-bold text-gray-500">Desde</label><input type="date" className="w-full p-2 border rounded" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}/></div><div><label className="text-xs font-bold text-gray-500">Hasta</label><input type="date" className="w-full p-2 border rounded" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}/></div>{mode === 'guardias' && (<div><label className="text-xs font-bold text-gray-500">Médico</label><select className="w-full p-2 border rounded" value={medicoId} onChange={e=>setMedicoId(e.target.value)}><option value="">Seleccione...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>)}<Button onClick={buscar}>Buscar</Button></div></Card>{resultados && <Card id="resultados-busqueda"><div className="flex justify-between items-center mb-4"><h4 className="font-bold">Resultados ({resultados.length}):</h4><div className="flex gap-2 no-print"><Button variant="secondary" onClick={copiarResultados} title="Copiar"><Clipboard/></Button><Button variant="dark" onClick={() => exportToPDF('resultados-busqueda', 'Resultados')} disabled={loadingPdf}>{loadingPdf ? '...' : 'PDF'}</Button></div></div><div className="w-scroll-container"><table className="w-full text-sm border-collapse border"><thead className="bg-gray-100">{mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}{mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th></tr>}{mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}</thead><tbody>{resultados.map((r, i) => (<tr key={i} className="hover:bg-gray-50">{mode === 'guardias' && <><td className="border p-2">{r.fecha}</td><td className="border p-2">{r.turno}</td><td className="border p-2">{r.tipo}</td></>}{mode === 'licencias' && <><td className="border p-2 font-bold">{r.medicoNombre}</td><td className="border p-2">{r.motivo}</td><td className="border p-2">{formatDateISO(r.desde)}</td><td className="border p-2">{formatDateISO(r.hasta)}</td></>}{mode === 'totales' && <><td className="border p-2 font-medium">{r.nombre}</td><td className="border p-2 text-center">{r.propias}</td><td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td><td className="border p-2 text-center text-gray-500">{r.arreglos}</td></>}</tr>))}</tbody></table></div></Card>}</div> );
         };
 
-        const VistaPlantilla = () => { /* ... igual ... */ 
+        const VistaPlantilla = () => { 
             const [editingDay, setEditingDay] = useState(null); const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const mapVisualToReal = (idx) => (idx + 1) % 7; const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
             const EditTemplateModal = () => {
                 if (editingDay === null) return null;
@@ -227,7 +239,7 @@
                 );
                 return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Configurar Base: {diasSemana[editingDay]}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-600 mb-2">Turno Día</h4><TemplateSlot label="Médico 1" slotData={form.dia1} onChange={d => setForm({...form, dia1: d})} /><TemplateSlot label="Médico 2" slotData={form.dia2} onChange={d => setForm({...form, dia2: d})} /></div><div><h4 className="font-bold text-indigo-600 mb-2">Turno Noche</h4><TemplateSlot label="Médico 1" slotData={form.noche1} onChange={d => setForm({...form, noche1: d})} /><TemplateSlot label="Médico 2" slotData={form.noche2} onChange={d => setForm({...form, noche2: d})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingDay(null)}>Cancelar</Button><Button onClick={guardar}>Guardar</Button></div></div></div>);
             };
-            return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><Button onClick={() => exportToPDF('plantilla-print', 'Plantilla_Base')} variant="dark" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
+            return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><Button onClick={() => exportToPDF('plantilla-print', 'Plantilla_Base')} variant="dark" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button></div><div className="grid-responsive-fill">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
         };
 
         const VistaCalendario = () => {
@@ -361,7 +373,7 @@
                     <div className="flex justify-between items-center"><div className="flex gap-2"><button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 bg-gray-200 rounded">←</button><h2 className="font-bold text-xl">{mesNombre}</h2><button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 bg-gray-200 rounded">→</button></div><div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div></div>
                     
                     {/* WRAPPER CON SCROLL HORIZONTAL Y ANCHO MÍNIMO FORZADO */}
-                    <div className="overflow-x-auto pb-4 w-full">
+                    <div className="w-scroll-container pb-4">
                         <div className="min-w-[1200px]"> {/* Ancho forzado para que entren bien los nombres */}
                             <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
                             <div className="grid grid-cols-7 gap-1">
@@ -407,7 +419,7 @@
             const FilaReporte = ({ item }) => ( <tr className="border-b text-xs"><td className="border p-1 text-center">{item.fecha}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 font-medium">{item.receptor}</td></tr> );
             const TablaGrupo = ({ items }) => ( <table className="w-full text-sm border-collapse border border-gray-400 mb-4"><thead><tr className="bg-gray-100 text-xs uppercase"><th className="border p-1 w-24">Fecha</th><th className="border p-1 w-16">12 hs<br/>Sem</th><th className="border p-1 w-16">24 hs<br/>Sem</th><th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th><th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th><th className="border p-1 text-left">Depositar en recibo de</th></tr></thead><tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody></table> );
             return (
-                <div id="reporte-ministerio" className="space-y-8 bg-white p-8 min-h-screen overflow-x-auto">
+                <div id="reporte-ministerio" className="space-y-8 bg-white p-8 min-h-screen w-scroll-container">
                     <div className="min-w-[800px]">
                         <div className="flex justify-between items-center mb-8 no-print"><h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2><Button onClick={() => exportToPDF('reporte-ministerio', `Guardias_${mesNombre}`)} variant="dark" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : <><FileDown size={16}/> Descargar PDF</>}</Button></div>
                         {excedidos.length > 0 && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 no-print"><p className="font-bold flex items-center gap-2"><AlertTriangle/> ALERTA DE FACTURACIÓN: Límite Excedido (>10)</p><ul className="list-disc pl-5 mt-2">{excedidos.map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return <li key={id}>{med ? med.nombre : '?'}: Tiene {cant} guardias (Máx 10).</li> })}</ul></div>}
@@ -440,11 +452,11 @@
 
         return (
             <div className="min-h-screen pb-10 font-sans text-gray-900 bg-gray-50">
-                <nav className="bg-white shadow mb-6">
-                    <div className="w-full px-2 lg:px-4">
-                        <div className="flex justify-between h-16">
+                <nav className="bg-white shadow mb-6 w-scroll-container">
+                    <div className="w-full px-4">
+                        <div className="flex justify-between h-16 min-w-[600px]">
                             <div className="flex items-center"><span className="font-bold text-xl text-blue-600 flex items-center gap-2"><Umbrella /> Guardias Cloud</span></div>
-                            <div className="flex space-x-2 items-center overflow-x-auto">
+                            <div className="flex space-x-2 items-center">
                                 <button onClick={() => setView('calendario')} className={`px-3 py-1 rounded ${view === 'calendario' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Calendario</button>
                                 <button onClick={() => setView('medicos')} className={`px-3 py-1 rounded ${view === 'medicos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Médicos</button>
                                 <button onClick={() => setView('licencias')} className={`px-3 py-1 rounded ${view === 'licencias' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Licencias</button>
@@ -456,7 +468,7 @@
                         </div>
                     </div>
                 </nav>
-                <main className="w-full px-1 lg:px-4">
+                <main className="w-full px-2 lg:px-6">
                     {!user ? <div className="text-center p-10">Conectando con base de datos segura...</div> : renderView()}
                 </main>
             </div>
