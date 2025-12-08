@@ -18,6 +18,15 @@
     <!-- 4. Librerías para PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- 5. Librería Gemini (SDK Generativo) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
     
     <style>
         /* Ajustes globales */
@@ -40,6 +49,27 @@
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 1.5rem;
         }
+        .ai-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: #a855f7;
+            border-radius: 50%;
+            animation: typing 1s infinite ease-in-out;
+            margin-right: 3px;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.5; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
@@ -57,6 +87,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
     import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { GoogleGenerativeAI } from "@google/generative-ai";
 
     const { useState, useEffect, useMemo } = React;
     const { jsPDF } = window.jspdf;
@@ -109,6 +140,8 @@
     const CloudUpload = () => <IconWrapper><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></IconWrapper>;
     const CalendarIcon = () => <IconWrapper><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
     const ShareIcon = () => <IconWrapper><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></IconWrapper>;
+    const Sparkles = () => <IconWrapper><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 5h4"/><path d="M18 17v4"/><path d="M16 19h4"/></IconWrapper>;
+    const Key = () => <IconWrapper><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></IconWrapper>;
 
     const Card = ({ children, className = "", id="" }) => <div id={id} className={`bg-white rounded-lg shadow p-4 ${className}`}>{children}</div>;
     const Button = ({ onClick, children, variant = "primary", className = "", disabled=false, title="" }) => {
@@ -119,7 +152,8 @@
             success: "bg-green-600 text-white hover:bg-green-700",
             warning: "bg-orange-500 text-white hover:bg-orange-600",
             dark: "bg-gray-800 text-white hover:bg-gray-900 disabled:bg-gray-600",
-            whatsapp: "bg-green-500 text-white hover:bg-green-600"
+            whatsapp: "bg-green-500 text-white hover:bg-green-600",
+            ai: "ai-gradient hover:opacity-90 disabled:opacity-50"
         };
         return <button onClick={onClick} disabled={disabled} className={`px-4 py-2 rounded-md transition-colors font-medium flex items-center justify-center gap-2 ${styles[variant]} ${className}`} title={title}>{children}</button>;
     };
@@ -135,6 +169,11 @@
         const [licencias, setLicencias] = useState([]);
         const [guardias, setGuardias] = useState({});
         const [plantilla, setPlantilla] = useState({});
+        
+        // --- ESTADO GEMINI ---
+        const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+        const [aiResponse, setAiResponse] = useState('');
+        const [loadingAi, setLoadingAi] = useState(false);
 
         // --- FIREBASE LISTENERS ---
         useEffect(() => {
@@ -296,8 +335,50 @@
             }, 500);
         };
 
+        // --- GEMINI INTEGRATION ---
+        const handleGeminiAnalysis = async (dataToAnalyze, promptType) => {
+            if (!geminiApiKey) {
+                alert("Por favor configura tu API Key de Gemini en la pestaña Configuración.");
+                setView('config');
+                return;
+            }
+
+            setLoadingAi(true);
+            setAiResponse('');
+
+            try {
+                const genAI = new GoogleGenerativeAI(geminiApiKey);
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+                let prompt = "";
+                const context = JSON.stringify(dataToAnalyze, null, 2);
+
+                if (promptType === 'reporte_mensual') {
+                    prompt = `Actúa como un Jefe de Servicio de Pediatría. Analiza los siguientes datos de guardias y licencias del mes. 
+                    
+                    Datos: ${context}
+                    
+                    Genera un reporte ejecutivo breve para el Director del Hospital.
+                    1. Resumen de novedades (quiénes cubrieron vacantes y licencias).
+                    2. Alertas de sobrecarga (médicos con muchas guardias extra).
+                    3. Sugerencias operativas.
+                    
+                    Formato: Texto plano, formal y conciso.`;
+                }
+
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                setAiResponse(response.text());
+            } catch (error) {
+                console.error("Error Gemini:", error);
+                setAiResponse("Error al consultar a la IA. Verifica tu API Key o intenta más tarde.");
+            } finally {
+                setLoadingAi(false);
+            }
+        };
+
         // --- VISTAS ---
-        const VistaMedicos = () => {
+        const VistaMedicos = () => { /* ... igual ... */
              const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
              const [filtroNombre, setFiltroNombre] = useState(''); const [listaMedicosVisible, setListaMedicosVisible] = useState(null); 
              const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
@@ -332,7 +413,7 @@
             );
         };
 
-        const VistaLicencias = () => {
+        const VistaLicencias = () => { /* ... igual ... */ 
              const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoIds: [], detalleCobertura: '' });
              const [filtroLicencias, setFiltroLicencias] = useState('');
             const { month, year } = getDaysInMonth(currentDate); 
@@ -344,7 +425,12 @@
             
             const toggleReemplazo = (id) => { setNueva(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
             const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: Date.now().toString(), medicoId: nueva.medicoId, reemplazoIds: nueva.reemplazoIds, motivo: nueva.motivo, detalleCobertura: nueva.detalleCobertura, desde: nueva.desde, hasta: nueva.hasta }); setNueva({ ...nueva, medicoId: '', reemplazoIds: [], detalleCobertura: '' }); };
-            const historialFiltrado = licencias.filter(lic => { if (!filtroLicencias) return false; const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return med && med.nombre.toLowerCase().includes(filtroLicencias.toLowerCase()); }).sort((a,b) => b.desde.localeCompare(a.desde));
+
+            const historialFiltrado = licencias.filter(lic => {
+                if (!filtroLicencias) return false;
+                const med = medicos.find(m => String(m.id) === String(lic.medicoId));
+                return med && med.nombre.toLowerCase().includes(filtroLicencias.toLowerCase());
+            }).sort((a,b) => b.desde.localeCompare(a.desde));
 
             return ( <div className="space-y-6">
                     <Card className="border border-yellow-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-yellow-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Mes Actual ({currentDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div><div className="bg-blue-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-blue-800 flex items-center gap-2"><CalendarIcon/> Mes Siguiente ({nextMonthDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasSiguienteMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias programadas.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasSiguienteMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div></div></Card>
