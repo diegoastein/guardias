@@ -86,29 +86,20 @@
         console.error("Error inicializando Firebase:", e);
     }
 
-    // --- ÍCONOS ---
+    // --- ÍCONOS (Depurados: Solo los utilizados) ---
     const IconWrapper = ({ children, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Umbrella = () => <IconWrapper><path d="M22 12A10 10 0 0 0 12 2v20"/><path d="M6 12a6 6 0 0 1 12 0"/></IconWrapper>;
-    const Moon = () => <IconWrapper className="text-indigo-500"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></IconWrapper>;
-    const Sun = () => <IconWrapper className="text-orange-500"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></IconWrapper>;
     const LayoutTemplate = () => <IconWrapper><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></IconWrapper>;
-    const RefreshCw = () => <IconWrapper><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
     const Settings = () => <IconWrapper><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconWrapper>;
-    const Save = () => <IconWrapper><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconWrapper>;
-    const Download = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
     const Upload = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper>;
     const Trash2 = () => <IconWrapper><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
     const Edit = () => <IconWrapper><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></IconWrapper>;
     const XCircle = () => <IconWrapper><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></IconWrapper>;
     const CheckCircle = () => <IconWrapper><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
-    const Copy = () => <IconWrapper><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconWrapper>;
-    const FileDown = () => <IconWrapper><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></IconWrapper>;
-    const AlertTriangle = () => <IconWrapper className="text-red-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconWrapper>;
     const Search = () => <IconWrapper><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
     const Clipboard = () => <IconWrapper><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
     const CloudUpload = () => <IconWrapper><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></IconWrapper>;
     const CalendarIcon = () => <IconWrapper><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
-    const ShareIcon = () => <IconWrapper><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></IconWrapper>;
 
     const Card = ({ children, className = "", id="" }) => <div id={id} className={`bg-white rounded-lg shadow p-4 ${className}`}>{children}</div>;
     const Button = ({ onClick, children, variant = "primary", className = "", disabled=false, title="" }) => {
@@ -160,9 +151,12 @@
             return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); };
         }, [user]);
 
+        // Memoizar lista ordenada para evitar re-ordenar en cada render
         const medicosOrdenados = useMemo(() => [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre)), [medicos]);
 
         // --- WRAPPERS DB ---
+        const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString();
+
         const dbAgregarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
         const dbEditarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
         const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, 'medicos', String(id))); };
@@ -207,7 +201,6 @@
             const clone = input.cloneNode(true);
             
             // CONFIGURACION ESPECIFICA SEGUN TIPO DE REPORTE
-            // Si es plantilla, forzamos un layout de lista para que no se superponga
             if (elementId === 'plantilla-print') {
                  clone.style.width = "800px"; 
                  const grid = clone.querySelector('.grid-responsive-fill');
@@ -232,11 +225,9 @@
             clone.style.zIndex = "-1";
             clone.style.padding = "20px"; 
             
-            // 2. Limpiar elementos (Botones y NO-PRINT class)
             const elementsToRemove = clone.querySelectorAll('button, .no-print');
             elementsToRemove.forEach(el => el.remove());
             
-            // 3. Forzar visibilidad de títulos ocultos
             const titles = clone.querySelectorAll('.print-title');
             titles.forEach(el => {
                  el.style.display = 'block'; 
@@ -298,7 +289,7 @@
         const VistaMedicos = () => {
              const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
              const [filtroNombre, setFiltroNombre] = useState(''); const [listaMedicosVisible, setListaMedicosVisible] = useState(null); 
-             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
+             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: generateId() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
              const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
              const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; 
              const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
@@ -341,7 +332,7 @@
             const licenciasSiguienteMes = licencias.filter(lic => lic.desde.startsWith(`${nextYear}-${nextMesStr}`) || lic.hasta.startsWith(`${nextYear}-${nextMesStr}`));
             
             const toggleReemplazo = (id) => { setNueva(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
-            const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: Date.now().toString(), medicoId: nueva.medicoId, reemplazoIds: nueva.reemplazoIds, motivo: nueva.motivo, detalleCobertura: nueva.detalleCobertura, desde: nueva.desde, hasta: nueva.hasta }); setNueva({ ...nueva, medicoId: '', reemplazoIds: [], detalleCobertura: '' }); };
+            const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: generateId(), medicoId: nueva.medicoId, reemplazoIds: nueva.reemplazoIds, motivo: nueva.motivo, detalleCobertura: nueva.detalleCobertura, desde: nueva.desde, hasta: nueva.hasta }); setNueva({ ...nueva, medicoId: '', reemplazoIds: [], detalleCobertura: '' }); };
 
             const historialFiltrado = licencias.filter(lic => {
                 if (!filtroLicencias) return false;
@@ -585,74 +576,73 @@
 
         const VistaReporte = () => { /* ... (Igual) ... */ 
             const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
-            const vacantesPorDia = {}; const licenciasPorMedico = {}; 
             const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-            const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
-            for (let d = 1; d <= 31; d++) {
-                const fechaObj = new Date(year, month, d); if (fechaObj.getMonth() !== month) break;
-                const fechaStr = fechaObj.toISOString().split('T')[0]; const diaSemanaIndex = fechaObj.getDay(); const nombreDia = diasSemanaNombres[diaSemanaIndex];
-                const g = guardias[fechaStr]; const p = plantilla[diaSemanaIndex]; 
-                if (!g) continue;
-                const analizarSlot = (actualSlot, templateSlot) => {
-                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
-                    const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
-                    const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : null;
-                    const receptor = prestador ? prestador : medicoActual; 
-                    const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
-                    let medicoOriginal = null;
-                    if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
-                    const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
-                    
-                    if (esVacanteOriginal) { 
-                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
-                        vacantesPorDia[nombreDia].push(item); 
-                    } else if (medicoOriginal) { 
-                        const nombreTitular = medicoOriginal.nombre; 
+            
+            // --- OPTIMIZACIÓN: useMemo para evitar recalcular todo el reporte en cada render ---
+            const datosReporte = useMemo(() => {
+                const vacantesPorDia = {}; const licenciasPorMedico = {}; 
+                const conteoFacturacion = {};
+                const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
+                
+                for (let d = 1; d <= 31; d++) {
+                    const fechaObj = new Date(year, month, d); if (fechaObj.getMonth() !== month) break;
+                    const fechaStr = fechaObj.toISOString().split('T')[0]; const diaSemanaIndex = fechaObj.getDay(); const nombreDia = diasSemanaNombres[diaSemanaIndex];
+                    const g = guardias[fechaStr]; const p = plantilla[diaSemanaIndex]; 
+                    if (!g) continue;
+                    const analizarSlot = (actualSlot, templateSlot) => {
+                        if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
+                        const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
+                        if(!medicoActual) return;
+
+                        const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : null;
+                        const receptor = prestador ? prestador : medicoActual; 
+                        const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
+                        let medicoOriginal = null;
+                        if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
+                        const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
                         
-                        // --- MODIFICACION: Incluir Motivo de Licencia en el Agrupamiento ---
-                        const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr);
-                        const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia';
-                        const tituloGrupo = `${nombreTitular} (${motivoLic})`;
-                        // -------------------------------------------------------------------
+                        if (esVacanteOriginal) { 
+                            if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
+                            vacantesPorDia[nombreDia].push(item); 
+                        } else if (medicoOriginal) { 
+                            const nombreTitular = medicoOriginal.nombre; 
+                            const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr);
+                            const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia';
+                            const tituloGrupo = `${nombreTitular} (${motivoLic})`;
+                            if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; 
+                            licenciasPorMedico[tituloGrupo].push(item); 
+                        }
+                    };
+                    analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
+                }
 
-                        if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; 
-                        licenciasPorMedico[tituloGrupo].push(item); 
-                    }
+                const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
+                
+                // Calculo de totales RAW (sin agrupar visualmente)
+                const sumarAlTopeRaw = (lista) => {
+                    lista.forEach(item => {
+                        conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1;
+                    });
                 };
-                analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
-            }
-            const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
-            
-            // --- TABLA TOTALES: UNIDADES DE 12HS (12h=1, 24h=2) - CALCULO RAW ---
-            const conteoFacturacion = {}; 
-            // Función interna para sumar slots individuales
-            const sumarAlTopeRaw = (lista) => {
-                lista.forEach(item => {
-                    // Contamos 1 punto por cada slot de 12hs, independientemente de si se agrupa visualmente después
-                    conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1;
-                });
-            };
+                const vacantesRaw = []; const licenciasRaw = [];
+                Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista));
+                Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista));
+                sumarAlTopeRaw(vacantesRaw);
+                sumarAlTopeRaw(licenciasRaw);
 
-            // Usamos las listas sin agrupar para el conteo matemático
-            const vacantesRaw = [];
-            const licenciasRaw = [];
-            
-            // Re-generamos listas planas para el conteo
-            Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista));
-            Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista));
+                const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
+                const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
+                
+                const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
+                    const med = medicos.find(m => String(m.id) === String(id));
+                    return { nombre: med ? med.nombre : '?', total: cant, id };
+                }).sort((a,b) => b.total - a.total);
 
-            sumarAlTopeRaw(vacantesRaw);
-            sumarAlTopeRaw(licenciasRaw);
+                return { vacantesFinales, licenciasFinales, totalesArray };
 
-            // Ahora sí procesamos para visualización
-            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
-            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
-            
-            // Generar array de totales para mostrar
-            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
-                const med = medicos.find(m => String(m.id) === String(id));
-                return { nombre: med ? med.nombre : '?', total: cant, id };
-            }).sort((a,b) => b.total - a.total);
+            }, [currentDate, guardias, plantilla, medicos, licencias]); // Dependencias del useMemo
+
+            const { vacantesFinales, licenciasFinales, totalesArray } = datosReporte;
 
             const FilaReporte = ({ item }) => ( <tr className="border-b text-xs"><td className="border p-1 text-center">{item.fecha}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 font-medium">{item.receptor}</td></tr> );
             const TablaGrupo = ({ items }) => ( <table className="w-full text-sm border-collapse border border-gray-400 mb-4"><thead><tr className="bg-gray-100 text-xs uppercase"><th className="border p-1 w-24">Fecha</th><th className="border p-1 w-16">12 hs<br/>Sem</th><th className="border p-1 w-16">24 hs<br/>Sem</th><th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th><th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th><th className="border p-1 text-left">Depositar en recibo de</th></tr></thead><tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody></table> );
