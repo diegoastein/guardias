@@ -406,6 +406,11 @@
             const [selectedDay, setSelectedDay] = useState(null); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
             const firstDayVisual = (firstDay + 6) % 7;
+
+            // --- NUEVO: DETECTAR SI ES EL DÍA DE HOY ---
+            const today = new Date();
+            const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+
             const aplicarPlantilla = () => {
                 if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
                 const nuevas = {};
@@ -446,7 +451,11 @@
                     const puedeDerivar = data.tipoPago === 'SISTEMA' && medicoSeleccionado && medicoSeleccionado.tieneRecibo;
                     const necesitaPrestamista = data.tipoPago === 'SISTEMA' && medicoSeleccionado && (!medicoSeleccionado.tieneRecibo || data.derivado);
                     
-                    // Nueva lógica para filtrar prestadores: Excluir a los que están de licencia en esta fecha
+                    // --- NUEVA LÓGICA DE FILTRADO (SOLICITUD DE USUARIO) ---
+                    // Excluir COMPLETAMENTE del menú a los que están de licencia
+                    const medicosDisponibles = medicosOrdenados.filter(m => !estaDeLicencia(m.id, fechaStr));
+                    
+                    // Filtramos prestadores (ya se hacía, pero mantenemos la lógica)
                     const prestadoresDisponibles = medicosOrdenados.filter(m => m.tieneRecibo && !estaDeLicencia(m.id, fechaStr));
 
                     return (
@@ -456,7 +465,11 @@
                                 <option value="CUBIERTA">Cubierta</option><option value="VACANTE">Vacante</option><option value="LICENCIA_SIAPE">Licencia</option>
                             </select>
                             {data.estado === 'CUBIERTA' && <>
-                                <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => onChangeSlot({...data, medicoId: e.target.value})}><option value="">Médico</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre} {estaDeLicencia(m.id, fechaStr)?'(Lic)':''}</option>)}</select>
+                                <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => onChangeSlot({...data, medicoId: e.target.value})}>
+                                    <option value="">Médico</option>
+                                    {/* Mapeamos SOLO los disponibles (sin licencias) */}
+                                    {medicosDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                </select>
                                 <select className="w-full mb-1 border" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}><option value="SISTEMA">Sistema</option><option value="PERSONAL">Personal</option></select>
                                 
                                 {puedeDerivar && (
@@ -573,7 +586,15 @@
                             <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
                             <div className="grid grid-cols-7 gap-1">
                                 {blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-100 rounded"></div>)}
-                                {daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col"><div className="text-right text-sm font-bold p-1 bg-gray-50 border-b">{d}</div><div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div></div>)}
+                                {daysArray.map(d=> (
+                                    <div key={d} onClick={()=>setSelectedDay(d)} 
+                                        className={`h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col 
+                                        ${isToday(d) ? 'ring-4 ring-blue-500 ring-inset bg-blue-50' : ''}`} // <-- CLASE AÑADIDA PARA RESALTAR HOY
+                                    >
+                                        <div className={`text-right text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>{d}</div>
+                                        <div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
