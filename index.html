@@ -47,6 +47,10 @@
         .prose p { margin-bottom: 0.5em; }
         .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.5em; }
         .prose strong { font-weight: bold; color: #2563eb; }
+        
+        /* Animación suave */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-in; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
@@ -118,6 +122,7 @@
     const ShareIcon = () => <IconWrapper><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></IconWrapper>;
     const BotIcon = () => <IconWrapper><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></IconWrapper>;
     const Sparkles = () => <IconWrapper className="text-purple-600"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></IconWrapper>;
+    const FileSpreadsheet = () => <IconWrapper><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconWrapper>;
 
     const Card = ({ children, className = "", id="" }) => <div id={id} className={`bg-white rounded-lg shadow p-4 ${className}`}>{children}</div>;
     const Button = ({ onClick, children, variant = "primary", className = "", disabled=false, title="" }) => {
@@ -414,10 +419,9 @@
         const VistaCalendario = () => {
             const { days, firstDay, month, year } = getDaysInMonth(currentDate);
             const [selectedDay, setSelectedDay] = useState(null); 
+            const [modoEdicion, setModoEdicion] = useState(false); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
             const firstDayVisual = (firstDay + 6) % 7;
-
-            // --- NUEVO: DETECTAR SI ES EL DÍA DE HOY ---
             const today = new Date();
             const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
 
@@ -456,62 +460,26 @@
                 
                 const SlotForm = ({ label, slotData, onChangeSlot }) => {
                     const data = slotData || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
-                    // MODIFICACIÓN: Siempre mostrar opción derivar si el médico tiene recibo
                     const medicoSeleccionado = medicos.find(m => String(m.id) === String(data.medicoId));
                     const puedeDerivar = data.tipoPago === 'SISTEMA' && medicoSeleccionado && medicoSeleccionado.tieneRecibo;
                     const necesitaPrestamista = data.tipoPago === 'SISTEMA' && medicoSeleccionado && (!medicoSeleccionado.tieneRecibo || data.derivado);
-                    
-                    // --- NUEVA LÓGICA DE FILTRADO (SOLICITUD DE USUARIO) ---
-                    // Excluir COMPLETAMENTE del menú a los que están de licencia
                     const medicosDisponibles = medicosOrdenados.filter(m => !estaDeLicencia(m.id, fechaStr));
-                    
-                    // Filtramos prestadores (ya se hacía, pero mantenemos la lógica)
                     const prestadoresDisponibles = medicosOrdenados.filter(m => m.tieneRecibo && !estaDeLicencia(m.id, fechaStr));
 
                     return (
                         <div className="bg-gray-50 p-2 border mb-2 text-sm">
-                            <div className="font-bold mb-1">{label}</div>
+                            <div className="font-bold mb-1 flex justify-between items-center">{label}</div>
                             <select className="w-full mb-1 border" value={data.estado} onChange={e => onChangeSlot({...data, estado: e.target.value})}>
                                 <option value="CUBIERTA">Cubierta</option><option value="VACANTE">Vacante</option><option value="LICENCIA_SIAPE">Licencia</option>
                             </select>
                             {data.estado === 'CUBIERTA' && <>
                                 <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => onChangeSlot({...data, medicoId: e.target.value})}>
                                     <option value="">Médico</option>
-                                    {/* Mapeamos SOLO los disponibles (sin licencias) */}
                                     {medicosDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
                                 </select>
                                 <select className="w-full mb-1 border" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}><option value="SISTEMA">Sistema</option><option value="PERSONAL">Personal</option></select>
-                                
-                                {puedeDerivar && (
-                                    <div className="flex items-center mb-1">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={data.derivado || false} 
-                                            onChange={e => {
-                                                const esDerivado = e.target.checked;
-                                                // Si destilda, limpiamos prestador
-                                                onChangeSlot({
-                                                    ...data, 
-                                                    derivado: esDerivado,
-                                                    prestadorId: esDerivado ? data.prestadorId : ''
-                                                });
-                                            }}
-                                        /> 
-                                        <label className="ml-1 text-xs text-gray-600 cursor-pointer">Derivar cobro</label>
-                                    </div>
-                                )}
-                                
-                                {necesitaPrestamista && (
-                                    <select 
-                                        className="w-full border bg-yellow-100" 
-                                        value={data.prestadorId||''} 
-                                        onChange={e=>onChangeSlot({...data, prestadorId: e.target.value})}
-                                    >
-                                        <option value="">Cobra...</option>
-                                        {/* Filtramos la lista aquí */}
-                                        {prestadoresDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
-                                    </select>
-                                )}
+                                {puedeDerivar && ( <div className="flex items-center mb-1"> <input type="checkbox" checked={data.derivado || false} onChange={e => { const esDerivado = e.target.checked; onChangeSlot({ ...data, derivado: esDerivado, prestadorId: esDerivado ? data.prestadorId : '' }); }} /> <label className="ml-1 text-xs text-gray-600 cursor-pointer">Derivar cobro</label> </div> )}
+                                {necesitaPrestamista && ( <select className="w-full border bg-yellow-100" value={data.prestadorId||''} onChange={e=>onChangeSlot({...data, prestadorId: e.target.value})} > <option value="">Cobra...</option> {prestadoresDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)} </select> )}
                             </>}
                         </div>
                     );
@@ -523,92 +491,47 @@
             const renderCell = (day) => {
                 const fStr = new Date(year, month, day).toISOString().split('T')[0];
                 const g = guardias[fStr];
-                
-                // --- LÓGICA DE VISUALIZACIÓN MEJORADA ---
-                // Siempre mostramos 4 huecos. Si están vacíos, mostramos bloque rojo.
-                const slots = [
-                    { data: g?.dia1, type: 'dia' },
-                    { data: g?.dia2, type: 'dia' },
-                    { data: g?.noche1, type: 'noche' },
-                    { data: g?.noche2, type: 'noche' }
-                ];
-
+                const slots = [ { data: g?.dia1, type: 'dia' }, { data: g?.dia2, type: 'dia' }, { data: g?.noche1, type: 'noche' }, { data: g?.noche2, type: 'noche' } ];
                 const renderSlot = (slot, index) => {
                     const isEmpty = !slot.data || slot.data.estado === 'VACANTE';
-                    
-                    if (isEmpty) {
-                        return (
-                            <div key={index} className="flex-1 bg-red-100 border border-red-300 text-red-600 text-xs font-bold flex items-center justify-center rounded-sm">
-                                VACANTE
-                            </div>
-                        );
-                    }
-
+                    if (isEmpty) { return ( <div key={index} className="flex-1 bg-red-100 border border-red-300 text-red-600 text-xs font-bold flex items-center justify-center rounded-sm"> VACANTE </div> ); }
                     const m = medicos.find(x => String(x.id) === String(slot.data.medicoId));
                     const enLicencia = m && estaDeLicencia(m.id, fStr);
-                    
                     let bgClass = "bg-green-100 border-green-300 text-green-900";
-                    let textClass = "";
-
-                    if (enLicencia) {
-                        bgClass = "bg-red-600 border-red-700 text-white font-bold";
-                    } else if (slot.data.estado === 'LICENCIA_SIAPE') {
-                        bgClass = "bg-purple-100 border-purple-300 text-purple-900";
-                    } else if (slot.data.tipoPago === 'PERSONAL') {
-                        bgClass = "bg-orange-100 border-orange-300 text-orange-900";
-                    } else if (slot.data.prestadorId) {
-                        bgClass = "bg-blue-100 border-blue-300 text-blue-900";
-                    }
-
-                    const displayName = m ? m.nombre.split(',')[0] : '?'; // Tomar solo apellido o primer nombre para que entre mejor
-
-                    return (
-                        <div key={index} className={`flex-1 ${bgClass} px-1 border rounded-sm flex items-center overflow-hidden whitespace-nowrap text-xs`} title={m ? m.nombre : '?'}>
-                            {enLicencia && <span className="mr-1">⚠️</span>}
-                            <span className="truncate">{displayName}</span>
-                        </div>
-                    );
+                    if (enLicencia) { bgClass = "bg-red-600 border-red-700 text-white font-bold"; } else if (slot.data.estado === 'LICENCIA_SIAPE') { bgClass = "bg-purple-100 border-purple-300 text-purple-900"; } else if (slot.data.tipoPago === 'PERSONAL') { bgClass = "bg-orange-100 border-orange-300 text-orange-900"; } else if (slot.data.prestadorId) { bgClass = "bg-blue-100 border-blue-300 text-blue-900"; }
+                    const displayName = m ? m.nombre.split(',')[0] : '?';
+                    return ( <div key={index} className={`flex-1 ${bgClass} px-1 border rounded-sm flex items-center overflow-hidden whitespace-nowrap text-xs`} title={m ? m.nombre : '?'}> {enLicencia && <span className="mr-1">⚠️</span>} <span className="truncate">{displayName}</span> </div> );
                 };
-
-                return (
-                    <div className="flex flex-col h-full gap-1 p-1">
-                        <div className="flex flex-col gap-1 flex-1">
-                            {renderSlot(slots[0], 0)}
-                            {renderSlot(slots[1], 1)}
-                        </div>
-                        <div className="h-[2px] bg-gray-300"></div>
-                        <div className="flex flex-col gap-1 flex-1">
-                            {renderSlot(slots[2], 2)}
-                            {renderSlot(slots[3], 3)}
-                        </div>
-                    </div>
-                );
+                return ( <div className="flex flex-col h-full gap-1 p-1"> <div className="flex flex-col gap-1 flex-1"> {renderSlot(slots[0], 0)} {renderSlot(slots[1], 1)} </div> <div className="h-[2px] bg-gray-300"></div> <div className="flex flex-col gap-1 flex-1"> {renderSlot(slots[2], 2)} {renderSlot(slots[3], 3)} </div> </div> );
             };
             const blanks = Array(firstDayVisual).fill(null);
             const daysArray = Array.from({ length: days }, (_, i) => i + 1);
             return (
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center"><div className="flex gap-2"><button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-2 bg-gray-200 rounded">←</button><h2 className="font-bold text-xl">{mesNombre}</h2><button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-2 bg-gray-200 rounded">→</button></div><div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div></div>
-                    
-                    {/* WRAPPER CON SCROLL HORIZONTAL Y ANCHO MÍNIMO FORZADO */}
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-3 rounded shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-3 bg-gray-100 hover:bg-gray-200 rounded-full text-2xl shadow-sm transition-all" title="Mes Anterior">◀</button>
+                            <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold hover:bg-blue-100 text-sm transition-colors">Hoy</button>
+                            <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-3 bg-gray-100 hover:bg-gray-200 rounded-full text-2xl shadow-sm transition-all" title="Mes Siguiente">▶</button>
+                            <h2 className="font-bold text-2xl text-gray-800 ml-2 capitalize">{mesNombre}</h2>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+                                <button onClick={() => setModoEdicion(false)} className={`px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${!modoEdicion ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}> <span>🔒</span> Ver </button>
+                                <button onClick={() => setModoEdicion(true)} className={`px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${modoEdicion ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}> <span>✏️</span> Editar </button>
+                            </div>
+                            {modoEdicion && ( <div className="flex gap-2 animate-fadeIn"> <Button onClick={aplicarPlantilla} variant="secondary" className="text-xs">Plantilla</Button> <Button onClick={repetirSemanaAnterior} variant="secondary" className="text-xs">Repetir</Button> </div> )}
+                        </div>
+                    </div>
                     <div className="w-scroll-container pb-4">
-                        <div className="min-w-[1200px]"> {/* Ancho forzado para que entren bien los nombres */}
+                        <div className="min-w-[1200px]">
                             <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
                             <div className="grid grid-cols-7 gap-1">
-                                {blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-100 rounded"></div>)}
-                                {daysArray.map(d=> (
-                                    <div key={d} onClick={()=>setSelectedDay(d)} 
-                                        className={`h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col 
-                                        ${isToday(d) ? 'ring-4 ring-blue-500 ring-inset bg-blue-50' : ''}`} // <-- CLASE AÑADIDA PARA RESALTAR HOY
-                                    >
-                                        <div className={`text-right text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>{d}</div>
-                                        <div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div>
-                                    </div>
-                                ))}
+                                {blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-50 rounded bg-opacity-50"></div>)}
+                                {daysArray.map(d=> ( <div key={d} onClick={() => { if (modoEdicion) setSelectedDay(d); }} className={`h-48 border rounded bg-white relative flex flex-col transition-all duration-200 ${isToday(d) ? 'ring-4 ring-blue-400 ring-inset bg-blue-50' : ''} ${modoEdicion ? 'cursor-pointer hover:shadow-lg hover:border-blue-300 hover:scale-[1.01]' : 'cursor-default opacity-95'} `}> <div className={`text-right text-sm font-bold p-1 border-b flex justify-between ${isToday(d) ? 'bg-blue-100 text-blue-800' : 'bg-gray-50'}`}> {modoEdicion && <span className="text-xs text-gray-400 font-normal">✏️</span>} <span>{d}</span> </div> <div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div> </div> ))}
                             </div>
                         </div>
                     </div>
-                    
                     {selectedDay && <EditGuardiaModal />}
                 </div>
             );
@@ -633,57 +556,29 @@
                     let medicoOriginal = null;
                     if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
                     const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
-                    
-                    if (esVacanteOriginal) { 
-                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
-                        vacantesPorDia[nombreDia].push(item); 
-                    } else if (medicoOriginal) { 
-                        const nombreTitular = medicoOriginal.nombre; 
-                        
-                        // --- MODIFICACION: Incluir Motivo de Licencia en el Agrupamiento ---
-                        const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr);
-                        const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia';
-                        const tituloGrupo = `${nombreTitular} (${motivoLic})`;
-                        // -------------------------------------------------------------------
-
-                        if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; 
-                        licenciasPorMedico[tituloGrupo].push(item); 
-                    }
+                    if (esVacanteOriginal) { if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; vacantesPorDia[nombreDia].push(item); } 
+                    else if (medicoOriginal) { const nombreTitular = medicoOriginal.nombre; const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr); const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia'; const tituloGrupo = `${nombreTitular} (${motivoLic})`; if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; licenciasPorMedico[tituloGrupo].push(item); }
                 };
                 analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
             }
             const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
-            
-            // --- TABLA TOTALES: UNIDADES DE 12HS (12h=1, 24h=2) - CALCULO RAW ---
             const conteoFacturacion = {}; 
-            // Función interna para sumar slots individuales
-            const sumarAlTopeRaw = (lista) => {
-                lista.forEach(item => {
-                    // Contamos 1 punto por cada slot de 12hs, independientemente de si se agrupa visualmente después
-                    conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1;
-                });
-            };
-
-            // Usamos las listas sin agrupar para el conteo matemático
-            const vacantesRaw = [];
-            const licenciasRaw = [];
-            
-            // Re-generamos listas planas para el conteo
+            const sumarAlTopeRaw = (lista) => { lista.forEach(item => { conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1; }); };
+            const vacantesRaw = []; const licenciasRaw = [];
             Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista));
             Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista));
-
-            sumarAlTopeRaw(vacantesRaw);
-            sumarAlTopeRaw(licenciasRaw);
-
-            // Ahora sí procesamos para visualización
+            sumarAlTopeRaw(vacantesRaw); sumarAlTopeRaw(licenciasRaw);
             const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
             const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
-            
-            // Generar array de totales para mostrar
-            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
-                const med = medicos.find(m => String(m.id) === String(id));
-                return { nombre: med ? med.nombre : '?', total: cant, id };
-            }).sort((a,b) => b.total - a.total);
+            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return { nombre: med ? med.nombre : '?', total: cant, id }; }).sort((a,b) => b.total - a.total);
+
+            const descargarExcel = () => {
+                let csvContent = "data:text/csv;charset=utf-8,Grupo,Detalle_Grupo,Fecha,Receptor_Pago,Es_SADOFE,Es_24HS\n";
+                const agregarFilas = (grupoNombre, items) => { items.forEach(item => { const row = [ grupoNombre, item.medicoOriginal || 'VACANTE', item.fecha, item.receptor, item.sadofe ? 'SI' : 'NO', item.es24 ? 'SI' : 'NO' ].join(","); csvContent += row + "\n"; }); };
+                Object.entries(vacantesFinales).forEach(([dia, items]) => agregarFilas("VACANTE", items));
+                Object.entries(licenciasFinales).forEach(([medico, items]) => agregarFilas("LICENCIA", items));
+                const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `Reporte_Guardias_${mesNombre}_${year}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            };
 
             const FilaReporte = ({ item }) => ( <tr className="border-b text-xs"><td className="border p-1 text-center">{item.fecha}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 font-medium">{item.receptor}</td></tr> );
             const TablaGrupo = ({ items }) => ( <table className="w-full text-sm border-collapse border border-gray-400 mb-4"><thead><tr className="bg-gray-100 text-xs uppercase"><th className="border p-1 w-24">Fecha</th><th className="border p-1 w-16">12 hs<br/>Sem</th><th className="border p-1 w-16">24 hs<br/>Sem</th><th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th><th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th><th className="border p-1 text-left">Depositar en recibo de</th></tr></thead><tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody></table> );
@@ -693,12 +588,12 @@
                     <div className="min-w-[800px]">
                         <div className="flex justify-between items-center mb-8 no-print"><h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2>
                             <div className="flex gap-2">
+                                <Button onClick={descargarExcel} variant="success" title="Descargar tabla para Excel"><FileSpreadsheet/> Exportar Excel</Button>
                                 <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
                                 <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
                             </div>
                         </div>
                         
-                        {/* TABLA DE TOTALES (NUEVA) - NO PRINT */}
                         <div className="mb-8 p-4 bg-gray-50 border rounded no-print">
                             <h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3>
                             <table className="w-full text-sm border-collapse bg-white">
