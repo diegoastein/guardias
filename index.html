@@ -225,12 +225,18 @@
                  clone.style.width = "1000px"; 
             }
 
+            // ESTILOS PARA PDF BLANCO
             clone.style.position = "absolute";
             clone.style.top = "-9999px";
             clone.style.left = "0";
             clone.style.background = "#ffffff";
             clone.style.zIndex = "-1";
-            clone.style.padding = "20px"; 
+            clone.style.padding = "20px";
+            
+            // ELIMINAR SOMBRAS Y EFECTOS VISUALES
+            clone.classList.remove('shadow', 'shadow-lg', 'shadow-md', 'rounded-lg', 'rounded');
+            clone.style.boxShadow = 'none';
+            clone.style.borderRadius = '0';
             
             // 2. Limpiar elementos (Botones y NO-PRINT class)
             const elementsToRemove = clone.querySelectorAll('button, .no-print');
@@ -519,13 +525,13 @@
                         </div>
                         <div className="w-scroll-container">
                             <table className="w-full text-sm border-collapse border">
-                                {/* CAMBIO DE COLOR: bg-gray-50 en lugar de bg-gray-100 para impresión más limpia */}
-                                <thead className="bg-gray-50">
+                                {/* CAMBIO DE COLOR: bg-white en lugar de bg-gray-50 para impresión más limpia y fondo blanco */}
+                                <thead className="bg-white">
                                     {mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}
                                     {mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th><th className="border p-2">Acciones</th></tr>}
                                     {mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}
                                 </thead>
-                                <tbody>{resultados.map((r, i) => (<tr key={i} className="hover:bg-gray-50">{mode === 'guardias' && <><td className="border p-2">{r.fecha}</td><td className="border p-2">{r.turno}</td><td className="border p-2">{r.tipo}</td></>}{mode === 'licencias' && <><td className="border p-2 font-bold">{r.medicoNombre}</td><td className="border p-2">{r.motivo}</td><td className="border p-2">{formatDateISO(r.desde)}</td><td className="border p-2">{formatDateISO(r.hasta)}</td><td className="border p-2"><button onClick={() => startEditLicencia(r)} className="text-blue-600"><Edit size={16}/></button></td></>}{mode === 'totales' && <><td className="border p-2 font-medium">{r.nombre}</td><td className="border p-2 text-center">{r.propias}</td><td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td><td className="border p-2 text-center text-gray-500">{r.arreglos}</td></>}</tr>))}</tbody>
+                                <tbody>{resultados.map((r, i) => (<tr key={i} className="bg-white">{mode === 'guardias' && <><td className="border p-2">{r.fecha}</td><td className="border p-2">{r.turno}</td><td className="border p-2">{r.tipo}</td></>}{mode === 'licencias' && <><td className="border p-2 font-bold">{r.medicoNombre}</td><td className="border p-2">{r.motivo}</td><td className="border p-2">{formatDateISO(r.desde)}</td><td className="border p-2">{formatDateISO(r.hasta)}</td><td className="border p-2"><button onClick={() => startEditLicencia(r)} className="text-blue-600"><Edit size={16}/></button></td></>}{mode === 'totales' && <><td className="border p-2 font-medium">{r.nombre}</td><td className="border p-2 text-center">{r.propias}</td><td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td><td className="border p-2 text-center text-gray-500">{r.arreglos}</td></>}</tr>))}</tbody>
                             </table>
                         </div>
                     </Card>}
