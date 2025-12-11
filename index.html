@@ -19,6 +19,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
+    <!-- 5. Librería Markdown para respuestas de IA -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
     <style>
         /* Ajustes globales */
         html, body { overflow-x: hidden; width: 100%; position: relative; }
@@ -40,6 +43,10 @@
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 1.5rem;
         }
+        /* Estilos para el chat de IA */
+        .prose p { margin-bottom: 0.5em; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.5em; }
+        .prose strong { font-weight: bold; color: #2563eb; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
@@ -58,7 +65,7 @@
     import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useRef } = React;
     const { jsPDF } = window.jspdf;
 
     // ==============================================================================================
@@ -86,20 +93,31 @@
         console.error("Error inicializando Firebase:", e);
     }
 
-    // --- ÍCONOS (Depurados: Solo los utilizados) ---
+    // --- ÍCONOS ---
     const IconWrapper = ({ children, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Umbrella = () => <IconWrapper><path d="M22 12A10 10 0 0 0 12 2v20"/><path d="M6 12a6 6 0 0 1 12 0"/></IconWrapper>;
+    const Moon = () => <IconWrapper className="text-indigo-500"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></IconWrapper>;
+    const Sun = () => <IconWrapper className="text-orange-500"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></IconWrapper>;
     const LayoutTemplate = () => <IconWrapper><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></IconWrapper>;
+    const RefreshCw = () => <IconWrapper><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
     const Settings = () => <IconWrapper><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconWrapper>;
+    const Save = () => <IconWrapper><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconWrapper>;
+    const Download = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
     const Upload = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper>;
     const Trash2 = () => <IconWrapper><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
     const Edit = () => <IconWrapper><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></IconWrapper>;
     const XCircle = () => <IconWrapper><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></IconWrapper>;
     const CheckCircle = () => <IconWrapper><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
+    const Copy = () => <IconWrapper><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconWrapper>;
+    const FileDown = () => <IconWrapper><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></IconWrapper>;
+    const AlertTriangle = () => <IconWrapper className="text-red-500"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconWrapper>;
     const Search = () => <IconWrapper><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
     const Clipboard = () => <IconWrapper><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
     const CloudUpload = () => <IconWrapper><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></IconWrapper>;
     const CalendarIcon = () => <IconWrapper><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
+    const ShareIcon = () => <IconWrapper><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></IconWrapper>;
+    const BotIcon = () => <IconWrapper><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></IconWrapper>;
+    const Sparkles = () => <IconWrapper className="text-purple-600"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></IconWrapper>;
 
     const Card = ({ children, className = "", id="" }) => <div id={id} className={`bg-white rounded-lg shadow p-4 ${className}`}>{children}</div>;
     const Button = ({ onClick, children, variant = "primary", className = "", disabled=false, title="" }) => {
@@ -110,7 +128,8 @@
             success: "bg-green-600 text-white hover:bg-green-700",
             warning: "bg-orange-500 text-white hover:bg-orange-600",
             dark: "bg-gray-800 text-white hover:bg-gray-900 disabled:bg-gray-600",
-            whatsapp: "bg-green-500 text-white hover:bg-green-600"
+            whatsapp: "bg-green-500 text-white hover:bg-green-600",
+            purple: "bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-300"
         };
         return <button onClick={onClick} disabled={disabled} className={`px-4 py-2 rounded-md transition-colors font-medium flex items-center justify-center gap-2 ${styles[variant]} ${className}`} title={title}>{children}</button>;
     };
@@ -151,12 +170,9 @@
             return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); };
         }, [user]);
 
-        // Memoizar lista ordenada para evitar re-ordenar en cada render
         const medicosOrdenados = useMemo(() => [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre)), [medicos]);
 
         // --- WRAPPERS DB ---
-        const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString();
-
         const dbAgregarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
         const dbEditarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
         const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, 'medicos', String(id))); };
@@ -201,6 +217,7 @@
             const clone = input.cloneNode(true);
             
             // CONFIGURACION ESPECIFICA SEGUN TIPO DE REPORTE
+            // Si es plantilla, forzamos un layout de lista para que no se superponga
             if (elementId === 'plantilla-print') {
                  clone.style.width = "800px"; 
                  const grid = clone.querySelector('.grid-responsive-fill');
@@ -225,9 +242,11 @@
             clone.style.zIndex = "-1";
             clone.style.padding = "20px"; 
             
+            // 2. Limpiar elementos (Botones y NO-PRINT class)
             const elementsToRemove = clone.querySelectorAll('button, .no-print');
             elementsToRemove.forEach(el => el.remove());
             
+            // 3. Forzar visibilidad de títulos ocultos
             const titles = clone.querySelectorAll('.print-title');
             titles.forEach(el => {
                  el.style.display = 'block'; 
@@ -289,7 +308,7 @@
         const VistaMedicos = () => {
              const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
              const [filtroNombre, setFiltroNombre] = useState(''); const [listaMedicosVisible, setListaMedicosVisible] = useState(null); 
-             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: generateId() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
+             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
              const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
              const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; 
              const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
@@ -332,7 +351,7 @@
             const licenciasSiguienteMes = licencias.filter(lic => lic.desde.startsWith(`${nextYear}-${nextMesStr}`) || lic.hasta.startsWith(`${nextYear}-${nextMesStr}`));
             
             const toggleReemplazo = (id) => { setNueva(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
-            const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: generateId(), medicoId: nueva.medicoId, reemplazoIds: nueva.reemplazoIds, motivo: nueva.motivo, detalleCobertura: nueva.detalleCobertura, desde: nueva.desde, hasta: nueva.hasta }); setNueva({ ...nueva, medicoId: '', reemplazoIds: [], detalleCobertura: '' }); };
+            const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: Date.now().toString(), medicoId: nueva.medicoId, reemplazoIds: nueva.reemplazoIds, motivo: nueva.motivo, detalleCobertura: nueva.detalleCobertura, desde: nueva.desde, hasta: nueva.hasta }); setNueva({ ...nueva, medicoId: '', reemplazoIds: [], detalleCobertura: '' }); };
 
             const historialFiltrado = licencias.filter(lic => {
                 if (!filtroLicencias) return false;
@@ -397,6 +416,11 @@
             const [selectedDay, setSelectedDay] = useState(null); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
             const firstDayVisual = (firstDay + 6) % 7;
+
+            // --- NUEVO: DETECTAR SI ES EL DÍA DE HOY ---
+            const today = new Date();
+            const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+
             const aplicarPlantilla = () => {
                 if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
                 const nuevas = {};
@@ -437,7 +461,11 @@
                     const puedeDerivar = data.tipoPago === 'SISTEMA' && medicoSeleccionado && medicoSeleccionado.tieneRecibo;
                     const necesitaPrestamista = data.tipoPago === 'SISTEMA' && medicoSeleccionado && (!medicoSeleccionado.tieneRecibo || data.derivado);
                     
-                    // Nueva lógica para filtrar prestadores: Excluir a los que están de licencia en esta fecha
+                    // --- NUEVA LÓGICA DE FILTRADO (SOLICITUD DE USUARIO) ---
+                    // Excluir COMPLETAMENTE del menú a los que están de licencia
+                    const medicosDisponibles = medicosOrdenados.filter(m => !estaDeLicencia(m.id, fechaStr));
+                    
+                    // Filtramos prestadores (ya se hacía, pero mantenemos la lógica)
                     const prestadoresDisponibles = medicosOrdenados.filter(m => m.tieneRecibo && !estaDeLicencia(m.id, fechaStr));
 
                     return (
@@ -447,7 +475,11 @@
                                 <option value="CUBIERTA">Cubierta</option><option value="VACANTE">Vacante</option><option value="LICENCIA_SIAPE">Licencia</option>
                             </select>
                             {data.estado === 'CUBIERTA' && <>
-                                <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => onChangeSlot({...data, medicoId: e.target.value})}><option value="">Médico</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre} {estaDeLicencia(m.id, fechaStr)?'(Lic)':''}</option>)}</select>
+                                <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => onChangeSlot({...data, medicoId: e.target.value})}>
+                                    <option value="">Médico</option>
+                                    {/* Mapeamos SOLO los disponibles (sin licencias) */}
+                                    {medicosDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                </select>
                                 <select className="w-full mb-1 border" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}><option value="SISTEMA">Sistema</option><option value="PERSONAL">Personal</option></select>
                                 
                                 {puedeDerivar && (
@@ -564,7 +596,15 @@
                             <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
                             <div className="grid grid-cols-7 gap-1">
                                 {blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-100 rounded"></div>)}
-                                {daysArray.map(d=><div key={d} onClick={()=>setSelectedDay(d)} className="h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col"><div className="text-right text-sm font-bold p-1 bg-gray-50 border-b">{d}</div><div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div></div>)}
+                                {daysArray.map(d=> (
+                                    <div key={d} onClick={()=>setSelectedDay(d)} 
+                                        className={`h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col 
+                                        ${isToday(d) ? 'ring-4 ring-blue-500 ring-inset bg-blue-50' : ''}`} // <-- CLASE AÑADIDA PARA RESALTAR HOY
+                                    >
+                                        <div className={`text-right text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>{d}</div>
+                                        <div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -576,73 +616,74 @@
 
         const VistaReporte = () => { /* ... (Igual) ... */ 
             const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
+            const vacantesPorDia = {}; const licenciasPorMedico = {}; 
             const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-            
-            // --- OPTIMIZACIÓN: useMemo para evitar recalcular todo el reporte en cada render ---
-            const datosReporte = useMemo(() => {
-                const vacantesPorDia = {}; const licenciasPorMedico = {}; 
-                const conteoFacturacion = {};
-                const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
-                
-                for (let d = 1; d <= 31; d++) {
-                    const fechaObj = new Date(year, month, d); if (fechaObj.getMonth() !== month) break;
-                    const fechaStr = fechaObj.toISOString().split('T')[0]; const diaSemanaIndex = fechaObj.getDay(); const nombreDia = diasSemanaNombres[diaSemanaIndex];
-                    const g = guardias[fechaStr]; const p = plantilla[diaSemanaIndex]; 
-                    if (!g) continue;
-                    const analizarSlot = (actualSlot, templateSlot) => {
-                        if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
-                        const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
-                        if(!medicoActual) return;
-
-                        const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : null;
-                        const receptor = prestador ? prestador : medicoActual; 
-                        const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
-                        let medicoOriginal = null;
-                        if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
-                        const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
+            const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
+            for (let d = 1; d <= 31; d++) {
+                const fechaObj = new Date(year, month, d); if (fechaObj.getMonth() !== month) break;
+                const fechaStr = fechaObj.toISOString().split('T')[0]; const diaSemanaIndex = fechaObj.getDay(); const nombreDia = diasSemanaNombres[diaSemanaIndex];
+                const g = guardias[fechaStr]; const p = plantilla[diaSemanaIndex]; 
+                if (!g) continue;
+                const analizarSlot = (actualSlot, templateSlot) => {
+                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
+                    const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
+                    const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : null;
+                    const receptor = prestador ? prestador : medicoActual; 
+                    const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
+                    let medicoOriginal = null;
+                    if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
+                    const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
+                    
+                    if (esVacanteOriginal) { 
+                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
+                        vacantesPorDia[nombreDia].push(item); 
+                    } else if (medicoOriginal) { 
+                        const nombreTitular = medicoOriginal.nombre; 
                         
-                        if (esVacanteOriginal) { 
-                            if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
-                            vacantesPorDia[nombreDia].push(item); 
-                        } else if (medicoOriginal) { 
-                            const nombreTitular = medicoOriginal.nombre; 
-                            const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr);
-                            const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia';
-                            const tituloGrupo = `${nombreTitular} (${motivoLic})`;
-                            if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; 
-                            licenciasPorMedico[tituloGrupo].push(item); 
-                        }
-                    };
-                    analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
-                }
+                        // --- MODIFICACION: Incluir Motivo de Licencia en el Agrupamiento ---
+                        const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr);
+                        const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia';
+                        const tituloGrupo = `${nombreTitular} (${motivoLic})`;
+                        // -------------------------------------------------------------------
 
-                const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
-                
-                // Calculo de totales RAW (sin agrupar visualmente)
-                const sumarAlTopeRaw = (lista) => {
-                    lista.forEach(item => {
-                        conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1;
-                    });
+                        if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; 
+                        licenciasPorMedico[tituloGrupo].push(item); 
+                    }
                 };
-                const vacantesRaw = []; const licenciasRaw = [];
-                Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista));
-                Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista));
-                sumarAlTopeRaw(vacantesRaw);
-                sumarAlTopeRaw(licenciasRaw);
+                analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
+            }
+            const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
+            
+            // --- TABLA TOTALES: UNIDADES DE 12HS (12h=1, 24h=2) - CALCULO RAW ---
+            const conteoFacturacion = {}; 
+            // Función interna para sumar slots individuales
+            const sumarAlTopeRaw = (lista) => {
+                lista.forEach(item => {
+                    // Contamos 1 punto por cada slot de 12hs, independientemente de si se agrupa visualmente después
+                    conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1;
+                });
+            };
 
-                const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
-                const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
-                
-                const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
-                    const med = medicos.find(m => String(m.id) === String(id));
-                    return { nombre: med ? med.nombre : '?', total: cant, id };
-                }).sort((a,b) => b.total - a.total);
+            // Usamos las listas sin agrupar para el conteo matemático
+            const vacantesRaw = [];
+            const licenciasRaw = [];
+            
+            // Re-generamos listas planas para el conteo
+            Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista));
+            Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista));
 
-                return { vacantesFinales, licenciasFinales, totalesArray };
+            sumarAlTopeRaw(vacantesRaw);
+            sumarAlTopeRaw(licenciasRaw);
 
-            }, [currentDate, guardias, plantilla, medicos, licencias]); // Dependencias del useMemo
-
-            const { vacantesFinales, licenciasFinales, totalesArray } = datosReporte;
+            // Ahora sí procesamos para visualización
+            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
+            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
+            
+            // Generar array de totales para mostrar
+            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
+                const med = medicos.find(m => String(m.id) === String(id));
+                return { nombre: med ? med.nombre : '?', total: cant, id };
+            }).sort((a,b) => b.total - a.total);
 
             const FilaReporte = ({ item }) => ( <tr className="border-b text-xs"><td className="border p-1 text-center">{item.fecha}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 font-medium">{item.receptor}</td></tr> );
             const TablaGrupo = ({ items }) => ( <table className="w-full text-sm border-collapse border border-gray-400 mb-4"><thead><tr className="bg-gray-100 text-xs uppercase"><th className="border p-1 w-24">Fecha</th><th className="border p-1 w-16">12 hs<br/>Sem</th><th className="border p-1 w-16">24 hs<br/>Sem</th><th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th><th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th><th className="border p-1 text-left">Depositar en recibo de</th></tr></thead><tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody></table> );
@@ -689,14 +730,205 @@
             return (<div className="max-w-xl mx-auto space-y-6"><Card className="border-l-4 border-blue-500"><h3 className="font-bold text-lg mb-2 flex gap-2"><CloudUpload/> Migración Local a Nube</h3><Button onClick={subirDatosLocales} className="w-full">☁️ Subir Datos Locales</Button></Card><Card className="border-l-4 border-green-500"><h3 className="font-bold text-lg mb-2 flex gap-2"><Upload/> Restaurar desde Archivo</h3><label className="block w-full"><span className="bg-green-600 text-white hover:bg-green-700 px-4 py-2 rounded-md transition-colors font-medium cursor-pointer block text-center flex items-center justify-center gap-2"><Upload size={18}/> Seleccionar Archivo JSON</span><input type="file" accept=".json" onChange={importarRespaldo} className="hidden" /></label></Card></div>);
         };
 
+        // --- NUEVA VISTA: ASISTENTE IA ---
+        const VistaIA = () => {
+            const [apiKey, setApiKey] = useState('');
+            const [tempKey, setTempKey] = useState('');
+            const [prompt, setPrompt] = useState('');
+            const [messages, setMessages] = useState([]);
+            const [loadingAI, setLoadingAI] = useState(false);
+            const [modelName, setModelName] = useState('gemini-1.5-flash');
+            const chatEndRef = useRef(null);
+
+            useEffect(() => {
+                // Recuperar key localmente
+                const storedKey = localStorage.getItem('gemini_api_key');
+                if (storedKey) setApiKey(storedKey);
+            }, []);
+
+            useEffect(() => {
+                if(chatEndRef.current) {
+                    chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+            }, [messages]);
+
+            const guardarKey = () => {
+                if(!tempKey.trim()) return;
+                localStorage.setItem('gemini_api_key', tempKey.trim());
+                setApiKey(tempKey.trim());
+            };
+
+            const borrarKey = () => {
+                localStorage.removeItem('gemini_api_key');
+                setApiKey('');
+                setTempKey('');
+            };
+
+            const consultarGemini = async () => {
+                if(!prompt.trim()) return;
+                const userMsg = prompt;
+                setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+                setPrompt('');
+                setLoadingAI(true);
+
+                try {
+                    // 1. Construir Contexto
+                    const contextData = {
+                        medicos: medicos.map(m => ({ nombre: m.nombre, tipo: m.tipo, recibo: m.tieneRecibo })),
+                        licencias: licencias,
+                        plantilla: plantilla,
+                        guardias_muestra: Object.entries(guardias).slice(0, 30).reduce((acc, [k,v]) => ({...acc, [k]: v}), {}) // Limitamos a 30 días para no saturar token limit en demo
+                    };
+                    
+                    const systemInstruction = `Eres un asistente útil para un sistema de gestión de guardias médicas pediátricas. 
+                    Analiza los datos JSON proporcionados para responder. 
+                    - 'medicos': Lista de personal.
+                    - 'guardias': Objeto donde las claves son fechas (YYYY-MM-DD) y valores son los turnos (dia1, dia2, noche1, noche2).
+                    - 'plantilla': Esquema base semanal (0=Domingo, 1=Lunes...).
+                    - 'licencias': Lista de ausencias.
+                    
+                    Si te preguntan por coberturas, revisa si el estado es 'VACANTE' o si hay reemplazos.
+                    Responde en español de forma concisa y profesional. Usa Markdown para formatear (negritas, listas).
+                    
+                    DATOS ACTUALES: ${JSON.stringify(contextData)}`;
+
+                    // 2. Llamada a API
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{ text: systemInstruction + "\n\nPregunta del usuario: " + userMsg }]
+                            }]
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error?.message || `Error ${response.status}: ${data.error?.status || 'Unknown error'}`);
+                    }
+
+                    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "No pude generar una respuesta.";
+                    setMessages(prev => [...prev, { role: 'model', content: aiResponse }]);
+
+                } catch (err) {
+                    console.error(err);
+                    setMessages(prev => [...prev, { role: 'error', content: `Error API: ${err.message}` }]);
+                } finally {
+                    setLoadingAI(false);
+                }
+            };
+
+            if (!apiKey) {
+                return (
+                    <div className="max-w-lg mx-auto mt-10">
+                        <Card className="border-l-4 border-purple-600">
+                            <div className="flex items-center gap-3 mb-4 text-purple-700">
+                                <Sparkles />
+                                <h3 className="text-xl font-bold">Activar Asistente IA</h3>
+                            </div>
+                            <p className="text-gray-600 mb-4 text-sm">
+                                Para usar la inteligencia artificial y analizar tus guardias, necesitas una <strong>API Key de Google Gemini</strong>.
+                                Esta clave se guardará <u>únicamente en tu navegador</u>.
+                            </p>
+                            
+                            <div className="bg-gray-50 p-3 rounded mb-4 text-sm border">
+                                1. Ve a <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 font-bold hover:underline">Google AI Studio</a>.<br/>
+                                2. Crea una clave gratuita.<br/>
+                                3. Pégala aquí abajo.
+                            </div>
+
+                            <input 
+                                type="password" 
+                                className="w-full p-2 border rounded mb-4" 
+                                placeholder="Pegar API Key aquí..."
+                                value={tempKey}
+                                onChange={e => setTempKey(e.target.value)}
+                            />
+                            
+                            <Button variant="purple" onClick={guardarKey} className="w-full">Guardar y Activar</Button>
+                        </Card>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-4xl mx-auto h-[calc(100vh-200px)] flex flex-col">
+                    <Card className="flex-1 flex flex-col overflow-hidden border border-purple-200">
+                        <div className="bg-purple-50 p-3 border-b border-purple-200 flex justify-between items-center">
+                            <h3 className="font-bold text-purple-800 flex items-center gap-2"><BotIcon/> Asistente de Guardias</h3>
+                            <div className="flex gap-2 items-center">
+                                <select 
+                                    className="text-xs border rounded p-1 bg-white" 
+                                    value={modelName} 
+                                    onChange={e => setModelName(e.target.value)}
+                                >
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Recomendado)</option>
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                    <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (Latest)</option>
+                                    <option value="gemini-pro">Gemini 1.0 Pro (Legacy)</option>
+                                </select>
+                                <button onClick={borrarKey} className="text-xs text-gray-500 hover:text-red-500 underline">Borrar Key</button>
+                            </div>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                            {messages.length === 0 && (
+                                <div className="text-center text-gray-400 mt-10">
+                                    <Sparkles className="mx-auto mb-2 opacity-50"/>
+                                    <p>Pregúntame sobre las guardias, licencias o estadísticas.</p>
+                                    <p className="text-xs mt-2">Ej: "¿Quién cubre más fines de semana?", "Resumí las licencias de este mes"</p>
+                                </div>
+                            )}
+                            {messages.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[80%] rounded-lg p-3 ${
+                                        msg.role === 'user' 
+                                            ? 'bg-blue-600 text-white' 
+                                            : msg.role === 'error' 
+                                                ? 'bg-red-100 text-red-700 border border-red-300'
+                                                : 'bg-white border shadow-sm prose prose-sm max-w-none text-gray-800'
+                                    }`}>
+                                        {msg.role === 'model' && window.marked 
+                                            ? <div dangerouslySetInnerHTML={{ __html: window.marked.parse(msg.content) }} />
+                                            : msg.content
+                                        }
+                                    </div>
+                                </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                        </div>
+
+                        <div className="p-4 bg-white border-t">
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    className="flex-1 p-2 border rounded focus:ring-2 focus:ring-purple-500 outline-none"
+                                    placeholder="Escribe tu consulta..."
+                                    value={prompt}
+                                    onChange={e => setPrompt(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && !loadingAI && consultarGemini()}
+                                />
+                                <Button variant="purple" onClick={consultarGemini} disabled={loadingAI}>
+                                    {loadingAI ? 'Pensando...' : 'Enviar'}
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
         const renderView = () => {
             switch(view) {
                 case 'calendario': return <VistaCalendario />;
                 case 'medicos': return <VistaMedicos />;
                 case 'licencias': return <VistaLicencias />;
                 case 'plantilla': return <VistaPlantilla />;
-                case 'reporte': return <VistaReporte />; // Reusar componente anterior
+                case 'reporte': return <VistaReporte />; 
                 case 'busqueda': return <VistaBusqueda />;
+                case 'ia': return <VistaIA />; // NUEVA VISTA
                 case 'config': return <VistaConfiguracion />;
                 default: return <VistaCalendario />;
             }
@@ -707,7 +939,7 @@
                 <nav className="bg-white shadow mb-6 w-scroll-container">
                     <div className="w-full px-4">
                         <div className="flex justify-between h-16 min-w-[600px]">
-                            <div className="flex items-center"><span className="font-bold text-xl text-blue-600 flex items-center gap-2"><Umbrella /> Guardias Cloud</span></div>
+                            <div className="flex items-center"><span className="font-bold text-xl text-blue-600 flex items-center gap-2"><Umbrella /> Gestión de Guardias </span></div>
                             <div className="flex space-x-2 items-center">
                                 <button onClick={() => setView('calendario')} className={`px-3 py-1 rounded ${view === 'calendario' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Calendario</button>
                                 <button onClick={() => setView('medicos')} className={`px-3 py-1 rounded ${view === 'medicos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Médicos</button>
@@ -715,6 +947,7 @@
                                 <button onClick={() => setView('plantilla')} className={`px-3 py-1 rounded ${view === 'plantilla' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Plantilla</button>
                                 <button onClick={() => setView('reporte')} className={`px-3 py-1 rounded ${view === 'reporte' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Reporte</button>
                                 <button onClick={() => setView('busqueda')} className={`px-3 py-1 rounded ${view === 'busqueda' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}><Search/></button>
+                                <button onClick={() => setView('ia')} className={`px-3 py-1 rounded ${view === 'ia' ? 'bg-purple-100 text-purple-700 font-bold ring-2 ring-purple-400' : 'text-gray-500 hover:bg-purple-50'}`} title="Asistente IA"><Sparkles /></button>
                                 <button onClick={() => setView('config')} className={`px-3 py-1 rounded ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`} title="Configuración"><Settings /></button>
                             </div>
                         </div>
