@@ -307,7 +307,7 @@
             const startEdit = (lic) => { setEditingId(lic.id); setEditForm({ ...lic, reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : []), detalleCobertura: lic.detalleCobertura || '' }); };
             const saveEdit = async () => { await dbAgregarLicencia(editForm); setEditingId(null); };
             const toggleReemplazoEdit = (id) => { setEditForm(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
-            return ( <div className="space-y-6"><Card className="border border-yellow-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-yellow-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Mes Actual ({currentDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div><div className="bg-blue-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-blue-800 flex items-center gap-2"><CalendarIcon/> Mes Siguiente ({nextMonthDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasSiguienteMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias programadas.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasSiguienteMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div></div></Card><Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div className="row-span-2"><label className="block text-sm text-gray-700 mb-1">Reemplazos Sugeridos (Selección Múltiple)</label><div className="border rounded p-2 h-32 overflow-y-auto bg-white">{medicosOrdenados.filter(m => m.tieneRecibo).map(m => (<label key={m.id} className="flex items-center gap-2 mb-1 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" checked={nueva.reemplazoIds.includes(m.id)} onChange={() => toggleReemplazo(m.id)}/>{m.nombre}</label>))}</div></div><div className="lg:col-span-2"><label className="block text-sm text-gray-700">Detalle Cobertura (Texto libre)</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez, 6 Dra. Gómez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar en Historial para Editar/Eliminar</h3><div className="mb-4"><input type="text" className="w-full p-2 border rounded" placeholder="Buscar por nombre..." value={filtroLicencias} onChange={e => setFiltroLicencias(e.target.value)}/></div>{filtroLicencias.length > 0 ? (<ul className="divide-y divide-gray-200">{historialFiltrado.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); let replacementText = lic.detalleCobertura || (lic.reemplazoIds && lic.reemplazoIds.length > 0 ? lic.reemplazoIds.map(rid => medicos.find(m => String(m.id) === String(rid))?.nombre).join(', ') : (lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId))?.nombre : 'Sin detalle')); return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : 'Médico borrado'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><div className="flex gap-2"><button onClick={() => startEdit(lic)} className="text-blue-600 text-sm hover:underline font-bold flex items-center gap-1"><Edit size={16}/> Editar</button><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline flex items-center gap-1"><Trash2 size={16}/> Eliminar</button></div></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{replacementText}</p></div></li>); })}</ul>) : <p className="text-gray-400 italic text-center p-4">Escribe un nombre para buscar.</p>}</Card>{editingId && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Editar Licencia</h3><div className="space-y-3"><div><label className="block text-sm font-medium">Médico</label><select className="w-full p-2 border rounded" value={editForm.medicoId} onChange={e => setEditForm({...editForm, medicoId: e.target.value})}>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm font-medium">Motivo</label><select className="w-full p-2 border rounded" value={editForm.motivo} onChange={e => setEditForm({...editForm, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div className="grid grid-cols-2 gap-2"><div><label className="block text-sm font-medium">Desde</label><input type="date" className="w-full p-2 border rounded" value={editForm.desde} onChange={e => setEditForm({...editForm, desde: e.target.value})} /></div><div><label className="block text-sm font-medium">Hasta</label><input type="date" className="w-full p-2 border rounded" value={editForm.hasta} onChange={e => setEditForm({...editForm, hasta: e.target.value})} /></div></div><div><label className="block text-sm font-medium mb-1">Reemplazos (Selección Múltiple)</label><div className="border rounded p-2 h-24 overflow-y-auto bg-gray-50">{medicosOrdenados.filter(m => m.tieneRecibo).map(m => (<label key={m.id} className="flex items-center gap-2 mb-1 text-sm cursor-pointer hover:bg-white p-1 rounded"><input type="checkbox" checked={editForm.reemplazoIds.includes(m.id)} onChange={() => toggleReemplazoEdit(m.id)}/>{m.nombre}</label>))}</div></div><div><label className="block text-sm font-medium">Detalle Cobertura</label><input className="w-full p-2 border rounded" value={editForm.detalleCobertura || ''} onChange={e => setEditForm({...editForm, detalleCobertura: e.target.value})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingId(null)}>Cancelar</Button><Button onClick={saveEdit}>Guardar Cambios</Button></div></div></div>)}</div> );
+            return ( <div className="space-y-6"><Card className="border border-yellow-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-yellow-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Mes Actual ({currentDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div><div className="bg-blue-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-blue-800 flex items-center gap-2"><CalendarIcon/> Mes Siguiente ({nextMonthDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasSiguienteMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias programadas.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasSiguienteMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div></div></Card><Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div className="row-span-2"><label className="block text-sm text-gray-700 mb-1">Reemplazos Sugeridos (Selección Múltiple)</label><div className="border rounded p-2 h-32 overflow-y-auto bg-white">{medicosOrdenados.filter(m => m.tieneRecibo).map(m => (<label key={m.id} className="flex items-center gap-2 mb-1 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" checked={nueva.reemplazoIds.includes(m.id)} onChange={() => toggleReemplazo(m.id)}/>{m.nombre}</label>))}</div></div><div className="lg:col-span-2"><label className="block text-sm text-gray-700">Detalle Cobertura (Texto libre)</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez, 6 Dra. Gómez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar en Historial para Editar/Eliminar</h3><div className="mb-4"><input type="text" className="w-full p-2 border rounded" placeholder="Buscar por nombre..." value={filtroLicencias} onChange={e => setFiltroLicencias(e.target.value)}/></div>{filtroLicencias.length > 0 ? (<ul className="divide-y divide-gray-200">{historialFiltrado.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); let replacementText = lic.detalleCobertura || (lic.reemplazoIds && lic.reemplazoIds.length > 0 ? lic.reemplazoIds.map(rid => medicos.find(m => String(m.id) === String(rid))?.nombre).join(', ') : (lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId))?.nombre : 'Sin detalle')); return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : 'Médico borrado'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><div className="flex gap-2"><button onClick={() => startEdit(lic)} className="text-blue-600 text-sm hover:underline font-bold flex items-center gap-1"><Edit size={16}/> Editar</button><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline flex items-center gap-1"><Trash2 size={16}/> Eliminar</button></div></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{replacementText}</p></div></li>); })}</ul>) : <p className="text-gray-400 italic text-center p-4">Escribe un nombre para buscar.</p>}</Card>{editingId && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Editar Licencia</h3><div className="space-y-3"><div><label className="block text-sm font-medium">Médico</label><select className="w-full p-2 border rounded" value={editLicenciaForm.medicoId} onChange={e => setEditLicenciaForm({...editLicenciaForm, medicoId: e.target.value})}>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm font-medium">Motivo</label><select className="w-full p-2 border rounded" value={editLicenciaForm.motivo} onChange={e => setEditLicenciaForm({...editLicenciaForm, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm font-medium">Desde</label><input type="date" className="w-full p-2 border rounded" value={editLicenciaForm.desde} onChange={e => setEditLicenciaForm({...editLicenciaForm, desde: e.target.value})} /></div><div><label className="block text-sm font-medium">Hasta</label><input type="date" className="w-full p-2 border rounded" value={editLicenciaForm.hasta} onChange={e => setEditLicenciaForm({...editLicenciaForm, hasta: e.target.value})} /></div><div><label className="block text-sm font-medium">Detalle Cobertura</label><input className="w-full p-2 border rounded" value={editLicenciaForm.detalleCobertura || ''} onChange={e => setEditLicenciaForm({...editLicenciaForm, detalleCobertura: e.target.value})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingLicenciaId(null)}>Cancelar</Button><Button onClick={saveEditLicencia}>Guardar Cambios</Button></div></div></div>)}</div> );
         };
 
         const VistaBusqueda = () => { 
@@ -341,10 +341,43 @@
 
                 const results = [];
                 if(mode === 'licencias') { licencias.forEach(lic => { const [ly1, lm1, ld1] = lic.desde.split('-').map(Number); const [ly2, lm2, ld2] = lic.hasta.split('-').map(Number); const lInicio = new Date(ly1, lm1 - 1, ld1); const lFin = new Date(ly2, lm2 - 1, ld2); if (lInicio <= dateEnd && lFin >= dateStart) { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); results.push({ ...lic, medicoNombre: med ? med.nombre : '?' }); } }); setResultados(results); } 
-                else if (mode === 'guardias' || mode === 'totales') { if(mode === 'guardias' && !medicoId) return alert("Seleccione médico"); const tempStats = {}; let cursor = new Date(dateStart); while (cursor <= dateEnd) { const cy = cursor.getFullYear(); const cm = cursor.getMonth(); const cd = cursor.getDate(); const fStr = `${cy}-${String(cm+1).padStart(2,'0')}-${String(cd).padStart(2,'0')}`; const g = guardias[fStr]; if(g) { const diaSemana = cursor.getDay(); const p = plantilla[diaSemana]; const slots = [ { s: g.dia1, p: p?.dia1, n: 'Día 1' }, { s: g.dia2, p: p?.dia2, n: 'Día 2' }, { s: g.noche1, p: p?.noche1, n: 'Noche 1' }, { s: g.noche2, p: p?.noche2, n: 'Noche 2' } ]; slots.forEach(slot => { if(slot.s && slot.s.estado === 'CUBIERTA' && slot.s.medicoId) { const mId = String(slot.s.medicoId); if (mode === 'guardias' && mId !== String(medicoId)) return; let tipo = 'Extra'; const titularId = slot.p?.medicoId ? String(slot.p.medicoId) : null; if (titularId === mId) { tipo = 'Propia'; } else if (!titularId) { tipo = 'Cobertura Vacante'; } else { const titularEnLicencia = estaDeLicencia(titularId, fStr); const nombreTitular = medicos.find(m=>String(m.id)===titularId)?.nombre || '?'; if (titularEnLicencia) { tipo = `Cobertura Licencia (${nombreTitular})`; } else { tipo = `Cubriendo a (${nombreTitular})`; } } 
-                if(slot.s.tipoPago === 'PERSONAL') tipo += ' (Arreglo)'; 
-                if (slot.s.prestadorId) { const prestadorName = medicos.find(m => String(m.id) === String(slot.s.prestadorId))?.nombre || '?'; tipo += ` (Recibo: ${prestadorName})`; }
-                if (mode === 'guardias') { results.push({ fecha: formatDateISO(fStr), turno: slot.n, tipo: tipo }); } else { if(!tempStats[mId]) tempStats[mId] = { nombre: medicos.find(m=>String(m.id)===mId)?.nombre, propias: 0, extras: 0, arreglos: 0 }; if(slot.s.tipoPago === 'PERSONAL') tempStats[mId].arreglos++; else if(tipo === 'Propia') tempStats[mId].propias++; else tempStats[mId].extras++; } } }); } cursor.setDate(cursor.getDate() + 1); } if(mode === 'totales') setResultados(Object.values(tempStats)); else setResultados(results); } };
+                else if (mode === 'guardias' || mode === 'totales') { 
+                    if(mode === 'guardias' && !medicoId) return alert("Seleccione médico"); 
+                    const tempStats = {}; 
+                    let cursor = new Date(dateStart); 
+                    while (cursor <= dateEnd) { 
+                        const cy = cursor.getFullYear(); const cm = cursor.getMonth(); const cd = cursor.getDate(); 
+                        const fStr = `${cy}-${String(cm+1).padStart(2,'0')}-${String(cd).padStart(2,'0')}`; 
+                        const g = guardias[fStr]; 
+                        const dayOfWeek = cursor.getDay();
+                        const p = plantilla[dayOfWeek];
+
+                        if(g) { 
+                            const slots = [ { s: g.dia1, t: p?.dia1, n: 'Día 1' }, { s: g.dia2, t: p?.dia2, n: 'Día 2' }, { s: g.noche1, t: p?.noche1, n: 'Noche 1' }, { s: g.noche2, t: p?.noche2, n: 'Noche 2' } ]; 
+                            slots.forEach(slot => { 
+                                if(slot.s && slot.s.estado === 'CUBIERTA' && slot.s.medicoId) { 
+                                    const mId = String(slot.s.medicoId); 
+                                    if (mode === 'guardias' && mId !== String(medicoId)) return; 
+                                    
+                                    let tipo = 'Extra'; 
+                                    const titularId = slot.t?.medicoId ? String(slot.t.medicoId) : null; 
+                                    if (titularId === mId) { tipo = 'Propia'; } 
+                                    else if (!titularId) { tipo = 'Cobertura Vacante'; } 
+                                    else { const titularEnLicencia = estaDeLicencia(titularId, fStr); const nombreTitular = medicos.find(m=>String(m.id)===titularId)?.nombre || '?'; if (titularEnLicencia) { tipo = `Cobertura Licencia (${nombreTitular})`; } else { tipo = `Cubriendo a (${nombreTitular})`; } } 
+                                    
+                                    if(slot.s.tipoPago === 'PERSONAL') tipo += ' (Arreglo)'; 
+                                    if (slot.s.prestadorId) { const prestadorName = medicos.find(m => String(m.id) === String(slot.s.prestadorId))?.nombre || '?'; tipo += ` (Recibo: ${prestadorName})`; }
+                                    
+                                    if (mode === 'guardias') { results.push({ fecha: formatDateISO(fStr), turno: slot.n, tipo: tipo }); } 
+                                    else { if(!tempStats[mId]) tempStats[mId] = { nombre: medicos.find(m=>String(m.id)===mId)?.nombre, propias: 0, extras: 0, arreglos: 0 }; if(slot.s.tipoPago === 'PERSONAL') tempStats[mId].arreglos++; else if(tipo === 'Propia') tempStats[mId].propias++; else tempStats[mId].extras++; } 
+                                } 
+                            }); 
+                        } 
+                        cursor.setDate(cursor.getDate() + 1); 
+                    } 
+                    if(mode === 'totales') setResultados(Object.values(tempStats)); else setResultados(results); 
+                } 
+            };
             
             const copiarResultados = () => { if (!resultados) return; let texto = ""; if(mode === 'guardias') { texto = "Fecha\tTurno\tTipo\n"; resultados.forEach(r => texto += `${r.fecha}\t${r.turno}\t${r.tipo}\n`); } else if(mode === 'totales') { texto = "Médico\tPropias\tExtras\tArreglos\n"; resultados.forEach(r => texto += `${r.nombre}\t${r.propias}\t${r.extras}\t${r.arreglos}\n`); } navigator.clipboard.writeText(texto).then(() => alert("Copiado")); };
 
@@ -380,28 +413,45 @@
                     let totalUnits = 0;
                     const shifts = [];
                     for (let d = 1; d <= daysInMonth; d++) {
+                        const fObj = new Date(year, month, d);
+                        const dayOfWeek = fObj.getDay(); 
                         const fStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                         const g = guardias[fStr];
+                        const p = plantilla[dayOfWeek];
+
                         if (g) {
                             const slots = [
-                                { s: g.dia1, n: 'Día 1' }, { s: g.dia2, n: 'Día 2' },
-                                { s: g.noche1, n: 'Noche 1' }, { s: g.noche2, n: 'Noche 2' }
+                                { s: g.dia1, t: p?.dia1, n: 'Día 1' }, 
+                                { s: g.dia2, t: p?.dia2, n: 'Día 2' },
+                                { s: g.noche1, t: p?.noche1, n: 'Noche 1' }, 
+                                { s: g.noche2, t: p?.noche2, n: 'Noche 2' }
                             ];
-                            let dayUnits = 0;
+                            
                             slots.forEach(slot => {
-                                // Consideramos "Receptor" de la guardia
-                                const receptorId = slot.s?.prestadorId ? String(slot.s.prestadorId) : (slot.s?.medicoId ? String(slot.s.medicoId) : null);
+                                // 1. Debe estar cubierta y NO ser Personal (Arreglo)
+                                if (!slot.s || slot.s.estado !== 'CUBIERTA') return;
+                                if (slot.s.tipoPago === 'PERSONAL') return; // EXCLUIR ARREGLOS PERSONALES DEL REPORTE MASIVO
+
+                                // 2. Determinar Receptor (Quién cobra)
+                                const receptorId = slot.s.prestadorId ? String(slot.s.prestadorId) : (slot.s.medicoId ? String(slot.s.medicoId) : null);
                                 
-                                if (receptorId === String(medId) && slot.s.estado === 'CUBIERTA') {
-                                    dayUnits += 1; // 12hs = 1 unidad
+                                if (receptorId === String(medId)) {
+                                    // 3. Determinar si es "Propia" (Titular = Receptor) para excluirla
+                                    // Lógica similar a VistaReporte
+                                    const titularId = slot.t?.medicoId ? String(slot.t.medicoId) : null;
+                                    const esPropia = titularId && titularId === receptorId;
+
+                                    if (esPropia) return; // EXCLUIR PROPIAS (Se cobran por sueldo básico)
+
+                                    // Si pasa los filtros, suma
+                                    totalUnits += 1; // 12hs = 1 unidad
                                     shifts.push({
                                         fecha: formatDate(d, month, year),
                                         turno: slot.n,
-                                        tipo: slot.s.tipoPago === 'PERSONAL' ? 'Arreglo' : 'Guardia'
+                                        tipo: !titularId ? 'Cobertura Vacante' : 'Cobertura Licencia'
                                     });
                                 }
                             });
-                            totalUnits += dayUnits;
                         }
                     }
 
@@ -431,7 +481,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${shifts.length === 0 ? '<tr><td colspan="3" style="border: 1px solid #9ca3af; padding: 8px; text-align: center;">Sin guardias registradas este mes.</td></tr>' : 
+                                        ${shifts.length === 0 ? '<tr><td colspan="3" style="border: 1px solid #9ca3af; padding: 8px; text-align: center;">Sin guardias extras registradas este mes.</td></tr>' : 
                                           shifts.map(s => `<tr><td style="border: 1px solid #9ca3af; padding: 8px;">${s.fecha}</td><td style="border: 1px solid #9ca3af; padding: 8px;">${s.turno}</td><td style="border: 1px solid #9ca3af; padding: 8px;">${s.tipo}</td></tr>`).join('')}
                                     </tbody>
                                 </table>
@@ -584,7 +634,41 @@
                                 {mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th><th className="border p-2">Acciones</th></tr>}
                                 {mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}
                             </thead>
-                            <tbody>{resultados.map((r, i) => (<tr key={i} className="bg-white">{mode === 'guardias' && <><td className="border p-2">{r.fecha}</td><td className="border p-2">{r.turno}</td><td className="border p-2">{r.tipo}</td></>}{mode === 'licencias' && <><td className="border p-2 font-bold">{r.medicoNombre}</td><td className="border p-2">{r.motivo}</td><td className="border p-2">{formatDateISO(r.desde)}</td><td className="border p-2">{formatDateISO(r.hasta)}</td><td className="border p-2"><button onClick={() => startEditLicencia(r)} className="text-blue-600"><Edit size={16}/></button></td></>}{mode === 'totales' && <><td className="border p-2 font-medium">{r.nombre}</td><td className="border p-2 text-center">{r.propias}</td><td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td><td className="border p-2 text-center text-gray-500">{r.arreglos}</td></>}</tr>))}</tbody>
+                            <tbody>{resultados.map((r, i) => (
+                                <tr key={i} className="bg-white">
+                                    {mode === 'guardias' && (
+                                        <>
+                                            <td className="border p-2">{r.fecha}</td>
+                                            <td className="border p-2">{r.turno}</td>
+                                            <td className="border p-2">
+                                                {(r.tipo.includes('Propia') || r.tipo.includes('Arreglo')) ? 
+                                                    <span className="text-gray-500 italic">{r.tipo}</span> : 
+                                                    <span className="font-bold text-blue-600">{r.tipo}</span>
+                                                }
+                                            </td>
+                                        </>
+                                    )}
+                                    {mode === 'licencias' && (
+                                        <>
+                                            <td className="border p-2 font-bold">{r.medicoNombre}</td>
+                                            <td className="border p-2">{r.motivo}</td>
+                                            <td className="border p-2">{formatDateISO(r.desde)}</td>
+                                            <td className="border p-2">{formatDateISO(r.hasta)}</td>
+                                            <td className="border p-2">
+                                                <button onClick={() => startEditLicencia(r)} className="text-blue-600"><Edit size={16}/></button>
+                                            </td>
+                                        </>
+                                    )}
+                                    {mode === 'totales' && (
+                                        <>
+                                            <td className="border p-2 font-medium">{r.nombre}</td>
+                                            <td className="border p-2 text-center">{r.propias}</td>
+                                            <td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td>
+                                            <td className="border p-2 text-center text-gray-500">{r.arreglos}</td>
+                                        </>
+                                    )}
+                                </tr>
+                            ))}</tbody>
                         </table>
                     </div>
                 </Card>}
