@@ -224,6 +224,9 @@
                  if(grid) { grid.style.display = 'block'; grid.style.gap = '0'; }
                  const cards = clone.querySelectorAll('.relative.border');
                  cards.forEach(c => { c.style.marginBottom = '20px'; c.style.border = '1px solid #ccc'; c.style.pageBreakInside = 'avoid'; });
+            } else if (elementId === 'reporte-ministerio') {
+                // Aumentar el ancho para que la tabla quepa mejor en el PDF
+                clone.style.width = "1200px"; 
             } else {
                  clone.style.width = "1000px"; 
             }
@@ -835,7 +838,7 @@
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Detalle Cobertura</label>
+                        <label className="block text-sm font-medium">Detalle Cobertura (Texto libre)</label>
                         <input className="w-full p-2 border rounded" value={editLicenciaForm.detalleCobertura || ''} onChange={e => setEditLicenciaForm({...editLicenciaForm, detalleCobertura: e.target.value})} />
                     </div>
                 </div>
@@ -1137,37 +1140,97 @@
             
             const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return { nombre: med ? med.nombre : '?', total: cant, id }; }).sort((a,b) => b.total - a.total);
             
-            // REPORTE FILA (MODIFICADO - ELIMINADA COLUMNA item.medico)
+            // REPORTE FILA 
             const FilaReporte = ({ item }) => ( 
                 <tr className="border-b text-xs">
-                    <td className="border p-1 text-center">{item.fecha}</td>
-                    <td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td>
-                    <td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td>
-                    <td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td>
-                    <td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td>
-                    {/* CAMBIO: Se muestra quién cobra/recibe (Ahora ocupa el espacio de las dos columnas de médico) */}
-                    <td className="border p-1 font-bold text-blue-700 text-left">{item.receptor}</td>
+                    <td className="border p-1 text-center w-24">{item.fecha}</td>
+                    <td className="border p-1 text-center bg-gray-50 w-16">{!item.sadofe && !item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-gray-50 w-16">{!item.sadofe && item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-blue-50 w-16">{item.sadofe && !item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-blue-50 w-16">{item.sadofe && item.es24 ? 'X' : ''}</td>
+                    {/* CAMBIO: Se muestra quién cobra/recibe (Ocupa el espacio restante) */}
+                    <td className="border p-1 font-bold text-blue-700 text-left w-auto">{item.receptor}</td>
                 </tr> 
             );
             
-            // REPORTE TABLA (MODIFICADO - ELIMINADA COLUMNA "Médico que Hizo")
+            // REPORTE TABLA (MODIFICADO - Ajuste de anchos)
             const TablaGrupo = ({ items }) => ( 
                 <table className="w-full text-sm border-collapse border border-gray-400 mb-4">
                     <thead>
                         <tr className="bg-gray-100 text-xs uppercase">
-                            <th className="border p-1 w-16">Fecha</th>
-                            <th className="border p-1 w-12">12 hs<br/>Sem</th>
-                            <th className="border p-1 w-12">24 hs<br/>Sem</th>
-                            <th className="border p-1 w-12 bg-blue-50">12 hs<br/>SADOFE</th>
-                            <th className="border p-1 w-12 bg-blue-50">24 hs<br/>SADOFE</th>
-                            <th className="border p-1 text-left">Recibo/Cobra</th>
+                            <th className="border p-1 w-24">Fecha</th>
+                            <th className="border p-1 w-16">12 hs<br/>Sem</th>
+                            <th className="border p-1 w-16">24 hs<br/>Sem</th>
+                            <th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th>
+                            <th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th>
+                            <th className="border p-1 text-left w-auto">Recibo/Cobra</th>
                         </tr>
                     </thead>
                     <tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody>
                 </table> 
             );
 
-            return ( <div id="reporte-ministerio" className="space-y-8 bg-white p-8 min-h-screen w-scroll-container"><div className="min-w-[800px]"><div className="flex justify-between items-center mb-8 no-print"><h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2><div className="flex gap-2"><Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button></div></div><div className="mb-8 p-4 bg-gray-50 border rounded no-print"><h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3><table className="w-full text-sm border-collapse bg-white"><thead className="bg-gray-200"><tr><th className="border p-2 text-left">Médico</th><th className="border p-2 text-center">Total Unidades (12hs=1 / 24hs=2)</th><th className="border p-2 text-center">Estado</th></tr></thead><tbody>{totalesArray.map(t => (<tr key={t.id} className={t.total > 10 ? "bg-red-100 font-bold text-red-700" : ""}><td className="border p-2">{t.nombre}</td><td className="border p-2 text-center">{t.total}</td><td className="border p-2 text-center">{t.total > 10 ? "EXCEDIDO" : "OK"}</td></tr>))}{totalesArray.length === 0 && <tr><td colSpan="3" className="p-2 text-center italic">Sin datos.</td></tr>}</tbody></table></div><div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div><div><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE CARGOS VACANTES</h3>{Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes.</p> : Object.entries(vacantesFinales).map(([dia, items]) => (<div key={dia} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4><TablaGrupo items={items} /></div>))}</div><div className="mt-8"><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE LICENCIAS</h3>{Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de licencias.</p> : Object.entries(licenciasFinales).map(([medico, items]) => (<div key={medico} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {medico}</h4><TablaGrupo items={items} /></div>))}</div></div></div> );
+            return ( 
+            <div id="reporte-ministerio" className="space-y-8 bg-white p-4 min-h-screen">
+                <div className="min-w-[1000px]">
+                    <div className="flex justify-between items-center mb-8 no-print">
+                        <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2>
+                        <div className="flex gap-2">
+                            <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
+                            <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
+                        </div>
+                    </div>
+                    
+                    <div className="mb-8 p-4 bg-gray-50 border rounded no-print">
+                        <h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3>
+                        <table className="w-full text-sm border-collapse bg-white">
+                            <thead className="bg-gray-200">
+                                <tr>
+                                    <th className="border p-2 text-left">Médico</th>
+                                    <th className="border p-2 text-center">Total Unidades (12hs=1 / 24hs=2)</th>
+                                    <th className="border p-2 text-center">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {totalesArray.map(t => (
+                                    <tr key={t.id} className={t.total > 10 ? "bg-red-100 font-bold text-red-700" : ""}>
+                                        <td className="border p-2">{t.nombre}</td>
+                                        <td className="border p-2 text-center">{t.total}</td>
+                                        <td className="border p-2 text-center">{t.total > 10 ? "EXCEDIDO" : "OK"}</td>
+                                    </tr>
+                                ))}
+                                {totalesArray.length === 0 && <tr><td colSpan="3" className="p-2 text-center italic">Sin datos.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div>
+                    
+                    <div className="avoid-break">
+                        <h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE CARGOS VACANTES</h3>
+                        {Object.keys(vacantesFinales).length === 0 ? 
+                            <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes.</p> : 
+                            Object.entries(vacantesFinales).map(([dia, items]) => (
+                                <div key={dia} className="mb-6 avoid-break">
+                                    <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4>
+                                    <TablaGrupo items={items} />
+                                </div>
+                            ))}
+                    </div>
+                    
+                    <div className="mt-8 avoid-break">
+                        <h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE LICENCIAS</h3>
+                        {Object.keys(licenciasFinales).length === 0 ? 
+                            <p className="italic text-gray-500 mb-4">No hay coberturas de licencias.</p> : 
+                            Object.entries(licenciasFinales).map(([medico, items]) => (
+                                <div key={medico} className="mb-6 avoid-break">
+                                    <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {medico}</h4>
+                                    <TablaGrupo items={items} />
+                                </div>
+                            ))}
+                    </div>
+                </div>
+            </div> );
         };
 
         const VistaConfiguracion = () => {
@@ -1209,7 +1272,7 @@
                         </div>
                     </div>
                 </nav>
-                <main className="w-full px-2 lg:px-6">
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     {!user ? <div className="text-center p-10">Conectando con base de datos segura...</div> : renderView()}
                 </main>
             </div>
