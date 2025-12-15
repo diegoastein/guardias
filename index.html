@@ -201,7 +201,7 @@
         const formatDate = (d, m, y) => `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`;
         const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
-        const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
+        const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && lic.hasta);
         
         // --- MOTOR PDF + SHARE ---
         const handleExportAction = (elementId, filename, action = 'download') => {
@@ -1046,7 +1046,7 @@
             );
         };
 
-        const VistaReporte = () => { /* ... (Igual) ... */ 
+        const VistaReporte = () => { 
             const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
             const vacantesPorDia = {}; const licenciasPorMedico = {}; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
@@ -1058,34 +1058,45 @@
                 const analizarSlot = (actualSlot, templateSlot) => {
                     if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
                     const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
+                    // El receptor es el prestador, o si no hay, el médico que la hizo.
                     const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : medicoActual; 
-                    if (!prestador) return; // Si no hay ni médico ni prestador
+                    if (!prestador || !medicoActual) return; // Si falta información esencial
                     
                     const receptor = prestador; 
                     const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
                     let medicoOriginal = null;
                     if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
-                    const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
                     
-                    // Solo si el receptor es diferente al titular de la guardia (es una guardia extra)
-                    if (String(medicoActual.id) !== String(receptor.id)) {
-                        if (esVacanteOriginal) { 
-                            if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
-                            vacantesPorDia[nombreDia].push(item); 
-                        } 
-                        else if (medicoOriginal) { 
-                            const nombreTitular = medicoOriginal.nombre; 
-                            const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr); 
-                            const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia'; 
-                            const tituloGrupo = `${nombreTitular} (${motivoLic})`; 
-                            if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; 
-                            licenciasPorMedico[tituloGrupo].push(item); 
-                        }
-                    } else if (esVacanteOriginal || (medicoOriginal && String(medicoOriginal.id) !== String(medicoActual.id))) {
-                        // Caso donde el médico hizo la guardia pero no es titular (ej: es extra, pero se la cobra él)
-                        // Aquí no debería entrar, el filtro es solo para las guardias que se facturan a OTRO recibo.
-                        // El Reporte para el Ministerio es sobre QUIÉN COBRA (RECEPTOR) la guardia extra.
+                    const item = { 
+                        fecha: formatDate(d, month, year), 
+                        medico: medicoActual.nombre, // Quien HIZO la guardia
+                        receptor: receptor.nombre,   // Quien COBRA la guardia (recibo)
+                        sadofe: esSadofe(fechaObj), 
+                        medicoId: medicoActual.id, 
+                        receptorId: receptor.id, 
+                        diaRaw: d, 
+                        medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' 
+                    };
+                    
+                    // Solo si el receptor es diferente al titular de la guardia (es una guardia extra que se factura al ministerio)
+                    // Si el titular de la plantilla es diferente al medico actual, es una cobertura.
+                    const esCobertura = !esVacanteOriginal && String(templateSlot.medicoId) !== String(medicoActual.id);
+                    const esVacanteCubierta = esVacanteOriginal;
+
+                    if (esVacanteCubierta) { 
+                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
+                        vacantesPorDia[nombreDia].push(item); 
+                    } 
+                    else if (esCobertura) { 
+                        const nombreTitular = medicoOriginal.nombre; 
+                        const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr); 
+                        const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia'; 
+                        const tituloGrupo = `${nombreTitular} (${motivoLic})`; 
+                        if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; 
+                        licenciasPorMedico[tituloGrupo].push(item); 
                     }
+                    // Nota: Si el medico actual es el mismo que el receptor, y no es una cobertura de licencia/vacante (es su propia guardia titular), no se reporta aquí.
+                    // Si el medico actual es diferente al receptor, es una derivada, y ya está cubierta por la lógica anterior.
                 };
                 analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
             }
@@ -1093,6 +1104,7 @@
                 const mapa = new Map(); 
                 lista.forEach(item => { 
                     // Usamos la fecha y el ID del receptor para identificar guardias de 24hs
+                    // La 24hs debe ser hecha y cobrada por la misma persona/recibo en las dos partes (Dia/Noche)
                     const key = item.fecha + '-' + item.receptorId; 
                     if (mapa.has(key)) { 
                         mapa.get(key).es24 = true; 
@@ -1124,8 +1136,37 @@
             Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
             
             const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return { nombre: med ? med.nombre : '?', total: cant, id }; }).sort((a,b) => b.total - a.total);
-            const FilaReporte = ({ item }) => ( <tr className="border-b text-xs"><td className="border p-1 text-center">{item.fecha}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td><td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td><td className="border p-1 font-medium">{item.receptor}</td></tr> );
-            const TablaGrupo = ({ items }) => ( <table className="w-full text-sm border-collapse border border-gray-400 mb-4"><thead><tr className="bg-gray-100 text-xs uppercase"><th className="border p-1 w-24">Fecha</th><th className="border p-1 w-16">12 hs<br/>Sem</th><th className="border p-1 w-16">24 hs<br/>Sem</th><th className="border p-1 w-16 bg-blue-50">12 hs<br/>SADOFE</th><th className="border p-1 w-16 bg-blue-50">24 hs<br/>SADOFE</th><th className="border p-1 text-left">Depositar en recibo de</th></tr></thead><tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody></table> );
+            
+            // REPORTE FILA (MODIFICADO - ELIMINADA COLUMNA item.medico)
+            const FilaReporte = ({ item }) => ( 
+                <tr className="border-b text-xs">
+                    <td className="border p-1 text-center">{item.fecha}</td>
+                    <td className="border p-1 text-center bg-gray-50">{!item.sadofe && !item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-gray-50">{!item.sadofe && item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-blue-50">{item.sadofe && !item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-blue-50">{item.sadofe && item.es24 ? 'X' : ''}</td>
+                    {/* CAMBIO: Se muestra quién cobra/recibe (Ahora ocupa el espacio de las dos columnas de médico) */}
+                    <td className="border p-1 font-bold text-blue-700 text-left">{item.receptor}</td>
+                </tr> 
+            );
+            
+            // REPORTE TABLA (MODIFICADO - ELIMINADA COLUMNA "Médico que Hizo")
+            const TablaGrupo = ({ items }) => ( 
+                <table className="w-full text-sm border-collapse border border-gray-400 mb-4">
+                    <thead>
+                        <tr className="bg-gray-100 text-xs uppercase">
+                            <th className="border p-1 w-16">Fecha</th>
+                            <th className="border p-1 w-12">12 hs<br/>Sem</th>
+                            <th className="border p-1 w-12">24 hs<br/>Sem</th>
+                            <th className="border p-1 w-12 bg-blue-50">12 hs<br/>SADOFE</th>
+                            <th className="border p-1 w-12 bg-blue-50">24 hs<br/>SADOFE</th>
+                            <th className="border p-1 text-left">Recibo/Cobra</th>
+                        </tr>
+                    </thead>
+                    <tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody>
+                </table> 
+            );
+
             return ( <div id="reporte-ministerio" className="space-y-8 bg-white p-8 min-h-screen w-scroll-container"><div className="min-w-[800px]"><div className="flex justify-between items-center mb-8 no-print"><h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2><div className="flex gap-2"><Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button></div></div><div className="mb-8 p-4 bg-gray-50 border rounded no-print"><h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3><table className="w-full text-sm border-collapse bg-white"><thead className="bg-gray-200"><tr><th className="border p-2 text-left">Médico</th><th className="border p-2 text-center">Total Unidades (12hs=1 / 24hs=2)</th><th className="border p-2 text-center">Estado</th></tr></thead><tbody>{totalesArray.map(t => (<tr key={t.id} className={t.total > 10 ? "bg-red-100 font-bold text-red-700" : ""}><td className="border p-2">{t.nombre}</td><td className="border p-2 text-center">{t.total}</td><td className="border p-2 text-center">{t.total > 10 ? "EXCEDIDO" : "OK"}</td></tr>))}{totalesArray.length === 0 && <tr><td colSpan="3" className="p-2 text-center italic">Sin datos.</td></tr>}</tbody></table></div><div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div><div><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE CARGOS VACANTES</h3>{Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes.</p> : Object.entries(vacantesFinales).map(([dia, items]) => (<div key={dia} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4><TablaGrupo items={items} /></div>))}</div><div className="mt-8"><h3 className="bg-gray-800 text-white p-2 font-bold uppercase text-sm mb-4">COBERTURA DE LICENCIAS</h3>{Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de licencias.</p> : Object.entries(licenciasFinales).map(([medico, items]) => (<div key={medico} className="mb-6 avoid-break"><h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {medico}</h4><TablaGrupo items={items} /></div>))}</div></div></div> );
         };
 
