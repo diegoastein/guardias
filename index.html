@@ -263,6 +263,252 @@
         };
 
         // --- VISTAS (Declaradas como funciones internas para resolver ReferenceError) ---
+        
+        // ***************************************************************
+        // VISTA CALENDARIO (MOVING HERE TO RESOLVE ReferenceError)
+        // ***************************************************************
+        function VistaCalendario() {
+            const { days, firstDay, month, year } = getDaysInMonth(currentDate);
+            const [selectedDay, setSelectedDay] = useState(null); 
+            const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+            const firstDayVisual = (firstDay + 6) % 7;
+            const today = new Date();
+            const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+
+            const aplicarPlantilla = () => {
+                if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
+                const nuevas = {};
+                for (let d = 1; d <= days; d++) {
+                    const fObj = new Date(year, month, d);
+                    const tDay = plantilla[fObj.getDay()];
+                    if (tDay) nuevas[fObj.toISOString().split('T')[0].slice(0, 10)] = tDay; // Usar slice(0, 10) para asegurar formato YYYY-MM-DD
+                }
+                dbBatchGuardias(nuevas);
+            };
+            const repetirSemanaAnterior = () => {
+                if (!confirm("¿Rellenar huecos con semana anterior?")) return;
+                const nuevas = {};
+                let count = 0;
+                for (let d = 1; d <= days; d++) {
+                    const hoy = new Date(year, month, d);
+                    const fStrHoy = hoy.toISOString().split('T')[0].slice(0, 10);
+                    if (guardias[fStrHoy]) continue; 
+                    const atras = new Date(year, month, d - 7);
+                    const fStrAtras = atras.toISOString().split('T')[0].slice(0, 10);
+                    const gAtras = guardias[fStrAtras];
+                    if(gAtras) { nuevas[fStrHoy] = gAtras; count++; }
+                }
+                dbBatchGuardias(nuevas);
+                alert(`Se completaron ${count} días.`);
+            };
+            const EditGuardiaModal = () => {
+                if (!selectedDay) return null;
+                const fechaStr = new Date(year, month, selectedDay).toISOString().split('T')[0].slice(0, 10);
+                const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+                const guardiaActual = guardias[fechaStr] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
+                const [form, setForm] = useState(guardiaActual);
+                
+                const SlotForm = ({ label, slotData, onChangeSlot }) => {
+                    const data = slotData || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+                    const medicoSeleccionado = medicos.find(m => String(m.id) === String(data.medicoId));
+                    const puedeDerivar = data.tipoPago === 'SISTEMA' && medicoSeleccionado && medicoSeleccionado.tieneRecibo;
+                    const necesitaPrestamista = data.tipoPago === 'SISTEMA' && medicoSeleccionado && (!medicoSeleccionado.tieneRecibo || data.derivado);
+                    const medicosDisponibles = medicosOrdenados.filter(m => !estaDeLicencia(m.id, fechaStr));
+                    const prestadoresDisponibles = medicosOrdenados.filter(m => m.tieneRecibo && !estaDeLicencia(m.id, fechaStr));
+
+                    return (
+                        <div className="bg-gray-50 p-2 border mb-2 text-sm">
+                            <div className="font-bold mb-1">{label}</div>
+                            <select className="w-full mb-1 border" value={data.estado} onChange={e => onChangeSlot({...data, estado: e.target.value})}>
+                                <option value="CUBIERTA">Cubierta</option><option value="VACANTE">Vacante</option><option value="LICENCIA_SIAPE">Licencia</option>
+                            </select>
+                            {data.estado === 'CUBIERTA' && <>
+                                <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => {
+                                    const newMedicoId = e.target.value;
+                                    const newMedico = medicos.find(m => String(m.id) === String(newMedicoId));
+                                    let newPrestadorId = data.prestadorId;
+                                    if (newMedico && !newMedico.tieneRecibo) {
+                                    } else {
+                                        if (!data.derivado) newPrestadorId = ''; 
+                                    }
+                                    onChangeSlot({...data, medicoId: newMedicoId, prestadorId: newPrestadorId});
+                                }}>
+                                    <option value="">Médico</option>
+                                    {medicosDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                </select>
+                                <select className="w-full mb-1 border" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}><option value="SISTEMA">Sistema</option><option value="PERSONAL">Personal</option></select>
+                                {puedeDerivar && (<div className="flex items-center mb-1"><input type="checkbox" checked={data.derivado || false} onChange={e => { const esDerivado = e.target.checked; onChangeSlot({ ...data, derivado: esDerivado, prestadorId: esDerivado ? data.prestadorId : '' }); }} /> <label className="ml-1 text-xs text-gray-600 cursor-pointer">Derivar cobro (Recibo de otro)</label></div>)}
+                                {necesitaPrestamista && (<select className="w-full border bg-yellow-100" value={data.prestadorId||''} onChange={e=>onChangeSlot({...data, prestadorId: e.target.value})}><option value="">Cobra...</option>{prestadoresDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select>)}
+                            </>}
+                        </div>
+                    );
+                };
+                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar Guardia del {formatDate(selectedDay, month, year)}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}}>Guardar</Button></div></div></div>);
+            };
+            
+            const renderCell = (day) => {
+                const fStr = new Date(year, month, day).toISOString().split('T')[0].slice(0, 10);
+                const g = guardias[fStr];
+
+                // Obtener datos de plantilla para este día
+                const fechaObj = new Date(year, month, day);
+                const dayOfWeek = fechaObj.getDay(); // 0 (Sun) to 6 (Sat)
+                const p = plantilla[dayOfWeek]; // Template for this day
+
+                const slots = [ 
+                    { data: g?.dia1, template: p?.dia1, type: 'dia' }, 
+                    { data: g?.dia2, template: p?.dia2, type: 'dia' }, 
+                    { data: g?.noche1, template: p?.noche1, type: 'noche' }, 
+                    { data: g?.noche2, template: p?.noche2, type: 'noche' } 
+                ];
+                
+                const renderSlot = (slot, index) => {
+                    const isEmpty = !slot.data || slot.data.estado === 'VACANTE' || !slot.data.medicoId;
+                    
+                    // 1. Caso VACANTE (No cubierta)
+                    if (isEmpty) return (<div key={index} className="flex-1 bg-red-100 border border-red-300 text-red-600 text-xs font-bold flex items-center justify-center rounded-sm">VACANTE</div>);
+                    
+                    const m = medicos.find(x => String(x.id) === String(slot.data.medicoId));
+                    const enLicencia = m && estaDeLicencia(m.id, fStr);
+                    
+                    let bgClass = "bg-green-100 border-green-300 text-green-900"; // Default: Cubierta normal (Propia, Extra o de Sistema)
+                    let titleText = m ? m.nombre : '?';
+                    
+                    // Lógica de Clasificación de Cobertura
+                    const titularId = slot.template?.medicoId;
+                    const isVacanteOriginal = !titularId;
+                    
+                    // Determinar si el titular está en licencia (o si el slot tiene estado LICENCIA_SIAPE)
+                    const titularEnLicencia = titularId && estaDeLicencia(titularId, fStr);
+
+                    // 2. Prioridad: ARREGLO PERSONAL
+                    if (slot.data.tipoPago === 'PERSONAL') {
+                        bgClass = "bg-orange-100 border-orange-300 text-orange-900 font-medium";
+                        titleText = `${titleText} (Arreglo Personal)`;
+                    } 
+                    
+                    // 3. Prioridad: LICENCIA CUBIERTA (SIAPE o Titular de Licencia cubierto)
+                    else if (slot.data.estado === 'LICENCIA_SIAPE' || titularEnLicencia) {
+                        bgClass = "bg-purple-100 border-purple-300 text-purple-800 font-medium";
+                        titleText = `${titleText} (Cubre Licencia)`;
+                    }
+                    
+                    // 4. Prioridad: VACANTE CUBIERTA (Originalmente sin titular)
+                    else if (isVacanteOriginal) {
+                        bgClass = "bg-teal-100 border-teal-300 text-teal-800 font-medium";
+                        titleText = `${titleText} (Cubre Vacante)`;
+                    }
+                    
+                    // 5. Prioridad: DERIVADA A RECIBO (Cobra otro)
+                    else if (slot.data.prestadorId) {
+                        bgClass = "bg-blue-100 border-blue-300 text-blue-900 font-medium";
+                        const prestador = medicos.find(x => String(x.id) === String(slot.data.prestadorId));
+                        titleText = `${titleText} (Recibo: ${prestador ? prestador.nombre.split(',')[0] : '?'})`;
+                    }
+                    
+                    // 6. Prioridad MÁXIMA: ADVERTENCIA (Médico de turno en Licencia)
+                    if (enLicencia) {
+                        bgClass = "bg-red-600 border-red-700 text-white font-bold";
+                        titleText = `¡ADVERTENCIA! Médico de turno en LICENCIA.`;
+                    }
+
+                    const displayName = m ? m.nombre.split(',')[0] : '?'; 
+                    return (
+                        <div 
+                            key={index} 
+                            className={`flex-1 ${bgClass} px-1 border rounded-sm flex items-center overflow-hidden whitespace-nowrap text-xs`} 
+                            title={titleText}
+                        >
+                            {enLicencia && <span className="mr-1">⚠️</span>}
+                            <span className="truncate">{displayName}</span>
+                        </div>
+                    );
+                };
+                
+                return (<div className="flex flex-col h-full gap-1 p-1"><div className="flex flex-col gap-1 flex-1">{renderSlot(slots[0], 0)}{renderSlot(slots[1], 1)}</div><div className="h-[2px] bg-gray-300"></div><div className="flex flex-col gap-1 flex-1">{renderSlot(slots[2], 2)}{renderSlot(slots[3], 3)}</div></div>);
+            };
+            
+            const blanks = Array(firstDayVisual).fill(null);
+            const daysArray = Array.from({ length: days }, (_, i) => i + 1);
+            
+            // Componente de Leyenda de Colores (Implementación de la solicitud)
+            const ColorLegend = () => (
+                <Card className="mt-4 p-3 border-t">
+                    <h4 className="font-bold text-sm mb-2 text-gray-700">Leyenda de Colores:</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-orange-100 border border-orange-300"></div>
+                            <span>Arreglo Personal</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-purple-100 border border-purple-300"></div>
+                            <span>Cubre Licencia/SIAPE</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-teal-100 border border-teal-300"></div>
+                            <span>Cubre Vacante</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-green-100 border border-green-300"></div>
+                            <span>Titular/Extra Sistema</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-blue-100 border border-blue-300"></div>
+                            <span>Derivada (Recibo Otro)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-red-100 border border-red-300"></div>
+                            <span>VACANTE (No Cubierta)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-red-600 border border-red-700"></div>
+                            <span>⚠️ Médico en Licencia</span>
+                        </div>
+                    </div>
+                </Card>
+            );
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><ChevronLeft/></button>
+                            <h2 className="font-bold text-2xl text-gray-800 capitalize min-w-[200px] text-center">{mesNombre}</h2>
+                            <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><ChevronRight/></button>
+                            <Button onClick={() => setCurrentDate(new Date())} variant="secondary" className="ml-4 text-sm">Hoy</Button>
+                        </div>
+                        <div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div>
+                    </div>
+                    <div className="w-scroll-container pb-4">
+                        <div className="min-w-[1200px]">
+                            <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
+                            <div className="grid grid-cols-7 gap-1">
+                                {blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-100 rounded"></div>)}
+                                {daysArray.map(d=> (
+                                    <div 
+                                        key={d} 
+                                        onClick={()=>setSelectedDay(d)} 
+                                        className={`h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col ${isToday(d) ? 'ring-4 ring-blue-500 ring-inset bg-blue-50' : ''}`}
+                                    >
+                                        <div className={`text-right text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>{d}</div>
+                                        <div className="flex-1 h-full overflow-hidden">
+                                            {renderCell(d)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    {/* Nueva Leyenda de Colores */}
+                    <ColorLegend />
+                    {selectedDay && <EditGuardiaModal />}
+                </div>
+            );
+        }
+        // ***************************************************************
+        // FIN VISTA CALENDARIO
+        // ***************************************************************
+
 
         function VistaMedicos() {
              const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
@@ -315,7 +561,7 @@
             const startEdit = (lic) => { setEditingId(lic.id); setEditForm({ ...lic, reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : []), detalleCobertura: lic.detalleCobertura || '' }); };
             const saveEdit = async () => { await dbAgregarLicencia(editForm); setEditingId(null); };
             const toggleReemplazoEdit = (id) => { setEditForm(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
-            return ( <div className="space-y-6"><Card className="border border-yellow-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-yellow-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Mes Actual ({currentDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div><div className="bg-blue-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-blue-800 flex items-center gap-2"><CalendarIcon/> Mes Siguiente ({nextMonthDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasSiguienteMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias programadas.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasSiguienteMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div></div></Card><Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div className="row-span-2"><label className="block text-sm text-gray-700 mb-1">Reemplazos Sugeridos (Selección Múltiple)</label><div className="border rounded p-2 h-32 overflow-y-auto bg-white">{medicosOrdenados.filter(m => m.tieneRecibo).map(m => (<label key={m.id} className="flex items-center gap-2 mb-1 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" checked={nueva.reemplazoIds.includes(m.id)} onChange={() => toggleReemplazo(m.id)}/>{m.nombre}</label>))}</div></div><div className="lg:col-span-2"><label className="block text-sm text-gray-700">Detalle Cobertura (Texto libre)</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez, 6 Dra. Gómez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar en Historial para Editar/Eliminar</h3><div className="mb-4"><input type="text" className="w-full p-2 border rounded" placeholder="Buscar por nombre..." value={filtroLicencias} onChange={e => setFiltroLicencias(e.target.value)}/></div>{filtroLicencias.length > 0 ? (<ul className="divide-y divide-gray-200">{historialFiltrado.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); let replacementText = lic.detalleCobertura || (lic.reemplazoIds && lic.reemplazoIds.length > 0 ? lic.reemplazoIds.map(rid => medicos.find(m => String(m.id) === String(rid))?.nombre).join(', ') : (lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId))?.nombre : 'Sin detalle')); return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : 'Médico borrado'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><div className="flex gap-2"><button onClick={() => startEdit(lic)} className="text-blue-600 text-sm hover:underline font-bold flex items-center gap-1"><Edit size={16}/> Editar</button><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline flex items-center gap-1"><Trash2 size={16}/> Eliminar</button></div></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{replacementText}</p></div></li>); })}</ul>) : <p className="text-gray-400 italic text-center p-4">Escribe un nombre para buscar.</p>}</Card>{editingId && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Editar Licencia</h3><div className="space-y-3"><div><label className="block text-sm font-medium">Médico</label><select className="w-full p-2 border rounded" value={editForm.medicoId} onChange={e => setEditForm({...editForm, medicoId: e.target.value})}>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm font-medium">Motivo</label><select className="w-full p-2 border rounded" value={editForm.motivo} onChange={e => setEditForm({...editForm, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm font-medium">Desde</label><input type="date" className="w-full p-2 border rounded" value={editForm.desde} onChange={e => setEditForm({...editForm, desde: e.target.value})} /></div><div><label className="block text-sm font-medium">Hasta</label><input type="date" className="w-full p-2 border rounded" value={editForm.hasta} onChange={e => setEditForm({...editForm, hasta: e.target.value})} /></div><div><label className="block text-sm font-medium">Detalle Cobertura</label><input className="w-full p-2 border rounded" value={editForm.detalleCobertura || ''} onChange={e => setEditForm({...editForm, detalleCobertura: e.target.value})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingId(null)}>Cancelar</Button><Button onClick={saveEdit}>Guardar Cambios</Button></div></div></div>)}</div> );
+            return ( <div className="space-y-6"><Card className="border border-yellow-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-yellow-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Mes Actual ({currentDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div><div className="bg-blue-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-blue-800 flex items-center gap-2"><CalendarIcon/> Mes Siguiente ({nextMonthDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasSiguienteMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias programadas.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasSiguienteMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div></div></Card><Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div className="row-span-2"><label className="block text-sm text-gray-700 mb-1">Reemplazos Sugeridos (Selección Múltiple)</label><div className="border rounded p-2 h-32 overflow-y-auto bg-white">{medicosOrdenados.filter(m => m.tieneRecibo).map(m => (<label key={m.id} className="flex items-center gap-2 mb-1 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" checked={nueva.reemplazoIds.includes(m.id)} onChange={() => toggleReemplazo(m.id)}/>{m.nombre}</label>))}</div></div><div className="lg:col-span-2"><label className="block text-sm text-gray-700">Detalle Cobertura (Texto libre)</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez, 6 Dra. Gómez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar en Historial para Editar/Eliminar</h3><div className="mb-4"><input type="text" className="w-full p-2 border rounded" placeholder="Buscar por nombre..." value={filtroLicencias} onChange={e => setFiltroLicencias(e.target.value)}/></div>{filtroLicencias.length > 0 ? (<ul className="divide-y divide-gray-200">{historialFiltrado.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); let replacementText = lic.detalleCobertura || (lic.reemplazoIds && lic.reemplazoIds.length > 0 ? lic.reemplazoIds.map(rid => medicos.find(m => String(m.id) === String(rid))?.nombre).join(', ') : (lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId))?.nombre : 'Sin detalle')); return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : 'Médico borrado'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><div className="flex gap-2"><button onClick={() => startEdit(lic)} className="text-blue-600 text-sm hover:underline font-bold flex items-center gap-1"><Edit size={16}/></button><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline flex items-center gap-1"><Trash2 size={16}/> Eliminar</button></div></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{replacementText}</p></div></li>); })}</ul>) : <p className="text-gray-400 italic text-center p-4">Escribe un nombre para buscar.</p>}</Card>{editingId && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Editar Licencia</h3><div className="space-y-3"><div><label className="block text-sm font-medium">Médico</label><select className="w-full p-2 border rounded" value={editForm.medicoId} onChange={e => setEditForm({...editForm, medicoId: e.target.value})}>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm font-medium">Motivo</label><select className="w-full p-2 border rounded" value={editForm.motivo} onChange={e => setEditForm({...editForm, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm font-medium">Desde</label><input type="date" className="w-full p-2 border rounded" value={editForm.desde} onChange={e => setEditForm({...editForm, desde: e.target.value})} /></div><div><label className="block text-sm font-medium">Hasta</label><input type="date" className="w-full p-2 border rounded" value={editForm.hasta} onChange={e => setEditForm({...editForm, hasta: e.target.value})} /></div><div><label className="block text-sm font-medium">Detalle Cobertura</label><input className="w-full p-2 border rounded" value={editForm.detalleCobertura || ''} onChange={e => setEditForm({...editForm, detalleCobertura: e.target.value})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingId(null)}>Cancelar</Button><Button onClick={saveEdit}>Guardar Cambios</Button></div></div></div>)}</div> );
         }
 
         function VistaBusqueda() { 
@@ -337,7 +583,7 @@
              const saveEditLicencia = async () => { await dbAgregarLicencia(editLicenciaForm); setEditingLicenciaId(null); const updated = resultados.map(r => r.id === editLicenciaForm.id ? { ...editLicenciaForm, medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre } : r); setResultados(updated); };
              
              const buscar = () => {
-                if(mode !== 'derivadas' && (!fechaDesde || !fechaHasta) && mode !== 'masivo') return alert("Seleccione fechas");
+                if(mode !== 'derivadas' && mode !== 'masivo' && (!fechaDesde || !fechaHasta)) return alert("Seleccione fechas");
 
                 let titulo = `Reporte`;
                 const results = [];
@@ -805,120 +1051,6 @@
             return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><div className="flex gap-2"><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'download')} variant="primary" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : 'Descargar PDF'}</Button></div></div><div className="grid-responsive-fill">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
         }
 
-        function VistaCalendario() {
-            const { days, firstDay, month, year } = getDaysInMonth(currentDate);
-            const [selectedDay, setSelectedDay] = useState(null); 
-            const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
-            const firstDayVisual = (firstDay + 6) % 7;
-            const today = new Date();
-            const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
-
-            const aplicarPlantilla = () => {
-                if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
-                const nuevas = {};
-                for (let d = 1; d <= days; d++) {
-                    const fObj = new Date(year, month, d);
-                    const tDay = plantilla[fObj.getDay()];
-                    if (tDay) nuevas[fObj.toISOString().split('T')[0].slice(0, 10)] = tDay; // Usar slice(0, 10) para asegurar formato YYYY-MM-DD
-                }
-                dbBatchGuardias(nuevas);
-            };
-            const repetirSemanaAnterior = () => {
-                if (!confirm("¿Rellenar huecos con semana anterior?")) return;
-                const nuevas = {};
-                let count = 0;
-                for (let d = 1; d <= days; d++) {
-                    const hoy = new Date(year, month, d);
-                    const fStrHoy = hoy.toISOString().split('T')[0].slice(0, 10);
-                    if (guardias[fStrHoy]) continue; 
-                    const atras = new Date(year, month, d - 7);
-                    const fStrAtras = atras.toISOString().split('T')[0].slice(0, 10);
-                    const gAtras = guardias[fStrAtras];
-                    if(gAtras) { nuevas[fStrHoy] = gAtras; count++; }
-                }
-                dbBatchGuardias(nuevas);
-                alert(`Se completaron ${count} días.`);
-            };
-            const EditGuardiaModal = () => {
-                if (!selectedDay) return null;
-                const fechaStr = new Date(year, month, selectedDay).toISOString().split('T')[0].slice(0, 10);
-                const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
-                const guardiaActual = guardias[fechaStr] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
-                const [form, setForm] = useState(guardiaActual);
-                
-                const SlotForm = ({ label, slotData, onChangeSlot }) => {
-                    const data = slotData || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
-                    const medicoSeleccionado = medicos.find(m => String(m.id) === String(data.medicoId));
-                    const puedeDerivar = data.tipoPago === 'SISTEMA' && medicoSeleccionado && medicoSeleccionado.tieneRecibo;
-                    const necesitaPrestamista = data.tipoPago === 'SISTEMA' && medicoSeleccionado && (!medicoSeleccionado.tieneRecibo || data.derivado);
-                    const medicosDisponibles = medicosOrdenados.filter(m => !estaDeLicencia(m.id, fechaStr));
-                    const prestadoresDisponibles = medicosOrdenados.filter(m => m.tieneRecibo && !estaDeLicencia(m.id, fechaStr));
-
-                    return (
-                        <div className="bg-gray-50 p-2 border mb-2 text-sm">
-                            <div className="font-bold mb-1">{label}</div>
-                            <select className="w-full mb-1 border" value={data.estado} onChange={e => onChangeSlot({...data, estado: e.target.value})}>
-                                <option value="CUBIERTA">Cubierta</option><option value="VACANTE">Vacante</option><option value="LICENCIA_SIAPE">Licencia</option>
-                            </select>
-                            {data.estado === 'CUBIERTA' && <>
-                                <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => {
-                                    const newMedicoId = e.target.value;
-                                    const newMedico = medicos.find(m => String(m.id) === String(newMedicoId));
-                                    let newPrestadorId = data.prestadorId;
-                                    if (newMedico && !newMedico.tieneRecibo) {
-                                    } else {
-                                        if (!data.derivado) newPrestadorId = ''; 
-                                    }
-                                    onChangeSlot({...data, medicoId: newMedicoId, prestadorId: newPrestadorId});
-                                }}>
-                                    <option value="">Médico</option>
-                                    {medicosDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
-                                </select>
-                                <select className="w-full mb-1 border" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}><option value="SISTEMA">Sistema</option><option value="PERSONAL">Personal</option></select>
-                                {puedeDerivar && (<div className="flex items-center mb-1"><input type="checkbox" checked={data.derivado || false} onChange={e => { const esDerivado = e.target.checked; onChangeSlot({ ...data, derivado: esDerivado, prestadorId: esDerivado ? data.prestadorId : '' }); }} /> <label className="ml-1 text-xs text-gray-600 cursor-pointer">Derivar cobro (Recibo de otro)</label></div>)}
-                                {necesitaPrestamista && (<select className="w-full border bg-yellow-100" value={data.prestadorId||''} onChange={e=>onChangeSlot({...data, prestadorId: e.target.value})}><option value="">Cobra...</option>{prestadoresDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select>)}
-                            </>}
-                        </div>
-                    );
-                };
-                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar Guardia del {formatDate(selectedDay, month, year)}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}}>Guardar</Button></div></div></div>);
-            };
-            const renderCell = (day) => {
-                const fStr = new Date(year, month, day).toISOString().split('T')[0].slice(0, 10);
-                const g = guardias[fStr];
-                const slots = [ { data: g?.dia1, type: 'dia' }, { data: g?.dia2, type: 'dia' }, { data: g?.noche1, type: 'noche' }, { data: g?.noche2, type: 'noche' } ];
-                const renderSlot = (slot, index) => {
-                    const isEmpty = !slot.data || slot.data.estado === 'VACANTE';
-                    if (isEmpty) return (<div key={index} className="flex-1 bg-red-100 border border-red-300 text-red-600 text-xs font-bold flex items-center justify-center rounded-sm">VACANTE</div>);
-                    const m = medicos.find(x => String(x.id) === String(slot.data.medicoId));
-                    const enLicencia = m && estaDeLicencia(m.id, fStr);
-                    let bgClass = "bg-green-100 border-green-300 text-green-900";
-                    if (enLicencia) bgClass = "bg-red-600 border-red-700 text-white font-bold";
-                    else if (slot.data.estado === 'LICENCIA_SIAPE') bgClass = "bg-purple-100 border-purple-300 text-purple-900";
-                    else if (slot.data.tipoPago === 'PERSONAL') bgClass = "bg-orange-100 border-orange-300 text-orange-900";
-                    else if (slot.data.prestadorId) bgClass = "bg-blue-100 border-blue-300 text-blue-900";
-                    const displayName = m ? m.nombre.split(',')[0] : '?'; 
-                    return (<div key={index} className={`flex-1 ${bgClass} px-1 border rounded-sm flex items-center overflow-hidden whitespace-nowrap text-xs`} title={m ? m.nombre : '?'}>{enLicencia && <span className="mr-1">⚠️</span>}<span className="truncate">{displayName}</span></div>);
-                };
-                return (<div className="flex flex-col h-full gap-1 p-1"><div className="flex flex-col gap-1 flex-1">{renderSlot(slots[0], 0)}{renderSlot(slots[1], 1)}</div><div className="h-[2px] bg-gray-300"></div><div className="flex flex-col gap-1 flex-1">{renderSlot(slots[2], 2)}{renderSlot(slots[3], 3)}</div></div>);
-            };
-            const blanks = Array(firstDayVisual).fill(null);
-            const daysArray = Array.from({ length: days }, (_, i) => i + 1);
-            return (
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
-                        <div className="flex items-center gap-4">
-                            <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><ChevronLeft/></button>
-                            <h2 className="font-bold text-2xl text-gray-800 capitalize min-w-[200px] text-center">{mesNombre}</h2>
-                            <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><ChevronRight/></button>
-                            <Button onClick={() => setCurrentDate(new Date())} variant="secondary" className="ml-4 text-sm">Hoy</Button>
-                        </div>
-                        <div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div>
-                    </div>
-                    <div className="w-scroll-container pb-4"><div className="min-w-[1200px]"><div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1">{blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-100 rounded"></div>)}{daysArray.map(d=> (<div key={d} onClick={()=>setSelectedDay(d)} className={`h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col ${isToday(d) ? 'ring-4 ring-blue-500 ring-inset bg-blue-50' : ''}`}><div className={`text-right text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>{d}</div><div className="flex-1 h-full overflow-hidden">{renderCell(d)}</div></div>))}</div></div></div>{selectedDay && <EditGuardiaModal />}</div>
-            );
-        }
-
         function VistaReporte() { 
             const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
             const vacantesPorDia = {}; const licenciasPorMedico = {}; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -1050,22 +1182,6 @@
                     </div>
                 </div>
             </div> );
-        }
-
-        function VistaPlantilla() { 
-            const [editingDay, setEditingDay] = useState(null); const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const mapVisualToReal = (idx) => (idx + 1) % 7; const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
-            const EditTemplateModal = () => {
-                if (editingDay === null) return null;
-                const realDayIdx = mapVisualToReal(editingDay);
-                const dayData = plantilla[realDayIdx] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
-                const [form, setForm] = useState(dayData);
-                const guardar = () => { dbGuardarPlantilla(realDayIdx, form); setEditingDay(null); };
-                const TemplateSlot = ({ label, slotData, onChange }) => (
-                    <div className="bg-gray-50 p-2 rounded border mb-2"><div className="font-bold text-xs text-gray-600 mb-1">{label}</div><select className="w-full p-1 border rounded text-sm mb-1" value={slotData.medicoId || ''} onChange={e => onChange({...slotData, estado: e.target.value ? 'CUBIERTA' : 'VACANTE', medicoId: e.target.value})}><option value="">-- Vacante --</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
-                );
-                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Configurar Base: {diasSemana[editingDay]}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-600 mb-2">Turno Día</h4><TemplateSlot label="Médico 1" slotData={form.dia1} onChange={d => setForm({...form, dia1: d})} /><TemplateSlot label="Médico 2" slotData={form.dia2} onChange={d => setForm({...form, dia2: d})} /></div><div><h4 className="font-bold text-indigo-600 mb-2">Turno Noche</h4><TemplateSlot label="Médico 1" slotData={form.noche1} onChange={d => setForm({...form, noche1: d})} /><TemplateSlot label="Médico 2" slotData={form.noche2} onChange={d => setForm({...form, noche2: d})} /></div></div><div className="flex justify-end gap-2 mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingDay(null)}>Cancelar</Button><Button onClick={guardar}>Guardar</Button></div></div></div>);
-            };
-            return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><div className="flex gap-2"><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'download')} variant="primary" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : 'Descargar PDF'}</Button></div></div><div className="grid-responsive-fill">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
         }
 
         function VistaConfiguracion() {
