@@ -29,11 +29,9 @@ const CheckCircle = () => <IconWrapper><path d="M22 11.08V12a10 10 0 1 1-5.93-9.
 const Search = () => <IconWrapper><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
 const Clipboard = () => <IconWrapper><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
 const CalendarIcon = () => <IconWrapper><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
-const Download = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
 const ShareIcon = () => <IconWrapper><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></IconWrapper>;
 const ChevronLeft = () => <IconWrapper><polyline points="15 18 9 12 15 6" /></IconWrapper>;
 const ChevronRight = () => <IconWrapper><polyline points="9 18 15 12 9 6" /></IconWrapper>;
-const FileText = () => <IconWrapper><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
 const AlertOctagon = () => <IconWrapper className="text-red-500"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
 
 const Card = ({ children, className = "", id="" }) => <div id={id} className={`bg-white rounded-lg shadow p-4 ${className}`}>{children}</div>;
@@ -74,7 +72,6 @@ function App() {
     const medicosOrdenados = useMemo(() => [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre)), [medicos]);
 
     const dbAgregarMedico = async (m) => await setDoc(doc(db, 'medicos', String(m.id)), m);
-    const dbEditarMedico = async (m) => await setDoc(doc(db, 'medicos', String(m.id)), m);
     const dbBorrarMedico = async (id) => { if(confirm('¿Borrar?')) await deleteDoc(doc(db, 'medicos', String(id))); };
     const dbAgregarLicencia = async (l) => await setDoc(doc(db, 'licencias', String(l.id)), l);
     const dbBorrarLicencia = async (id) => { if(confirm('¿Borrar?')) await deleteDoc(doc(db, 'licencias', String(id))); };
@@ -86,8 +83,7 @@ function App() {
     const formatDate = (d, m, y) => `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`;
     const formatDateISO = (s) => s ? s.split('-').reverse().join('/') : '';
     const estaDeLicencia = (id, f) => licencias.some(l => String(l.medicoId) === String(id) && f >= l.desde && f <= l.hasta);
-
-    const handleExportAction = (elementId, filename, action = 'download') => {
+  const handleExportAction = (elementId, filename, action = 'download') => {
         const input = document.getElementById(elementId);
         if(!input) return;
         setLoadingPdf(true);
@@ -102,7 +98,8 @@ function App() {
                 const imgWidth = 210, imgHeight = (canvas.height * imgWidth) / canvas.width;
                 pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
                 if (action === 'share') {
-                    const file = new File([pdf.output('blob')], `${filename}.pdf`, { type: 'application/pdf' });
+                    const blob = pdf.output('blob');
+                    const file = new File([blob], `${filename}.pdf`, { type: 'application/pdf' });
                     if (navigator.share) navigator.share({ files: [file], title: filename });
                 } else pdf.save(`${filename}.pdf`);
                 document.body.removeChild(clone); setLoadingPdf(false);
@@ -129,10 +126,10 @@ function App() {
                         const titularId = s.t?.medicoId;
                         let bg = "bg-green-100 border-green-300 text-green-900";
                         if (enLicencia) bg = "bg-red-600 border-red-700 text-white font-bold";
-                        else if (s.d.tipoPago === 'PERSONAL') bg = "bg-orange-100 border-orange-300 text-orange-900";
-                        else if (s.d.estado === 'LICENCIA_SIAPE' || (titularId && estaDeLicencia(titularId, fStr))) bg = "bg-purple-100 border-purple-300 text-purple-800";
-                        else if (!titularId) bg = "bg-cyan-200 border-cyan-400 text-cyan-900";
-                        else if (s.d.prestadorId) bg = "bg-blue-100 border-blue-300 text-blue-900";
+                        else if (s.d.tipoPago === 'PERSONAL') bg = "bg-orange-100 border-orange-300 text-orange-900 font-medium";
+                        else if (s.d.estado === 'LICENCIA_SIAPE' || (titularId && estaDeLicencia(titularId, fStr))) bg = "bg-purple-100 border-purple-300 text-purple-800 font-medium";
+                        else if (!titularId) bg = "bg-cyan-200 border-cyan-400 text-cyan-900 font-bold";
+                        else if (s.d.prestadorId) bg = "bg-blue-100 border-blue-300 text-blue-900 font-medium";
                         return <div key={i} className={`flex-1 ${bg} px-1 border rounded-sm truncate text-[10px]`}>{enLicencia && "⚠️ "}{m ? m.nombre.split(',')[0] : '?'}</div>;
                     })}
                 </div>
@@ -144,7 +141,7 @@ function App() {
                 <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
                     <div className="flex items-center gap-4">
                         <button onClick={() => setCurrentDate(new Date(year, month - 1))}><ChevronLeft/></button>
-                        <h2 className="font-bold text-2xl capitalize min-w-[200px] text-center">{mesNombre}</h2>
+                        <h2 className="font-bold text-2xl capitalize text-center min-w-[200px]">{mesNombre}</h2>
                         <button onClick={() => setCurrentDate(new Date(year, month + 1))}><ChevronRight/></button>
                     </div>
                 </div>
@@ -158,19 +155,19 @@ function App() {
                     <div className="flex items-center gap-2"><div className="w-3 h-3 bg-orange-100 border border-orange-300"></div> Arreglo Personal</div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 bg-purple-100 border border-purple-300"></div> Cubre Licencia</div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 bg-cyan-200 border border-cyan-400"></div> Cubre Vacante</div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-600"></div> Médico en Licencia</div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-600"></div> ⚠️ Médico en Licencia</div>
                 </Card>
                 {selectedDay && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
                     <Card className="w-full max-w-2xl max-h-[90vh]">
                         <div className="flex justify-between mb-4 font-bold text-lg">Editar {formatDate(selectedDay, month, year)}<button onClick={()=>setSelectedDay(null)}><XCircle/></button></div>
                         <div className="grid grid-cols-2 gap-4">
-                            {['Día 1', 'Día 2', 'Noche 1', 'Noche 2'].map((lbl, idx) => {
+                            {['Día 1', 'Día 2', 'Noche 1', 'Noche 2'].map((l, i) => {
                                 const fStr = new Date(year, month, selectedDay).toISOString().split('T')[0].slice(0, 10);
-                                const g = guardias[fStr] || {}, key = ['dia1', 'dia2', 'noche1', 'noche2'][idx];
-                                const slot = g[key] || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+                                const g = guardias[fStr] || {}, key = ['dia1','dia2','noche1','noche2'][i];
+                                const slot = g[key] || {estado:'VACANTE', tipoPago:'SISTEMA'};
                                 return (
-                                    <div key={idx} className="p-2 border bg-gray-50 rounded">
-                                        <div className="font-bold text-xs mb-1 uppercase">{lbl}</div>
+                                    <div key={i} className="p-2 border bg-gray-50 rounded">
+                                        <div className="font-bold text-xs mb-1 uppercase">{l}</div>
                                         <select className="w-full text-sm mb-1" value={slot.estado} onChange={e=>dbGuardarGuardia(fStr, {...g, [key]:{...slot, estado:e.target.value}})}>
                                             <option value="CUBIERTA">Cubierta</option><option value="VACANTE">Vacante</option>
                                         </select>
@@ -181,6 +178,12 @@ function App() {
                                         <select className="w-full text-sm" value={slot.tipoPago} onChange={e=>dbGuardarGuardia(fStr, {...g, [key]:{...slot, tipoPago:e.target.value}})}>
                                             <option value="SISTEMA">Sistema</option><option value="PERSONAL">Personal</option>
                                         </select>
+                                        {slot.tipoPago === 'SISTEMA' && (
+                                            <select className="w-full text-sm mt-1 border-blue-200" value={slot.prestadorId||''} onChange={e=>dbGuardarGuardia(fStr, {...g, [key]:{...slot, prestadorId:e.target.value}})}>
+                                                <option value="">Recibo Propio...</option>
+                                                {medicosOrdenados.filter(m=>m.tieneRecibo).map(m=><option key={m.id} value={m.id}>Cobra: {m.nombre}</option>)}
+                                            </select>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -207,7 +210,7 @@ function VistaLicencias() {
                         <div><label className="text-sm">Médico</label><select className="w-full border p-2 rounded" value={nueva.medicoId} onChange={e=>setNueva({...nueva, medicoId:e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
                         <div><label className="text-sm">Desde</label><input type="date" className="w-full border p-2 rounded" value={nueva.desde} onChange={e=>setNueva({...nueva, desde:e.target.value})}/></div>
                         <div><label className="text-sm">Hasta</label><input type="date" className="w-full border p-2 rounded" value={nueva.hasta} onChange={e=>setNueva({...nueva, hasta:e.target.value})}/></div>
-                        <div className="lg:col-span-2"><label className="text-sm">Detalle Cobertura (Texto libre)</label><input className="w-full border p-2 rounded" value={nueva.detalleCobertura} onChange={e=>setNueva({...nueva, detalleCobertura:e.target.value})} placeholder="Ej: Dr. X cubre los días 1, 2 y 3..."/></div>
+                        <div className="lg:col-span-2"><label className="text-sm">Detalle Cobertura (Texto libre)</label><input className="w-full border p-2 rounded" value={nueva.detalleCobertura} onChange={e=>setNueva({...nueva, detalleCobertura:e.target.value})} placeholder="Ej: Dr. X cubre los días 1, 2..."/></div>
                         <Button onClick={()=>{if(!nueva.medicoId||!nueva.desde)return; dbAgregarLicencia({...nueva, id:Date.now().toString()}); setNueva({...nueva, medicoId:'', detalleCobertura:''});}}>Registrar</Button>
                     </div>
                 </Card>
@@ -215,18 +218,18 @@ function VistaLicencias() {
                     <h3 className="font-bold mb-4 flex items-center gap-2"><Search size={18}/> Historial</h3>
                     <input className="w-full border p-2 rounded mb-4" placeholder="Buscar médico..." value={filtro} onChange={e=>setFiltro(e.target.value)}/>
                     <ul className="divide-y">
-                        {historial.map(lic => {
-                            const med = medicos.find(m => String(m.id) === String(lic.medicoId));
-                            return (
-                                <li key={lic.id} className="py-4">
-                                    <div className="flex justify-between items-start">
-                                        <div><p className="font-bold">{med?.nombre}</p><p className="text-xs text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div>
-                                        <button onClick={()=>dbBorrarLicencia(lic.id)} className="text-red-500"><Trash2 size={18}/></button>
-                                    </div>
-                                    <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded text-sm italic">{lic.detalleCobertura || "Sin detalles registrados."}</div>
-                                </li>
-                            );
-                        })}
+                        {historial.map(lic => (
+                            <li key={lic.id} className="py-4">
+                                <div className="flex justify-between items-start">
+                                    <div><p className="font-bold text-lg text-blue-900">{medicos.find(m=>String(m.id)===String(lic.medicoId))?.nombre}</p><p className="text-xs text-gray-500 font-semibold">{lic.motivo} | {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div>
+                                    <button onClick={()=>dbBorrarLicencia(lic.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={20}/></button>
+                                </div>
+                                <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded text-sm italic text-gray-700">
+                                    <span className="font-bold text-blue-800 uppercase text-[10px] block mb-1">Detalle Cobertura:</span>
+                                    {lic.detalleCobertura || "Sin detalles registrados."}
+                                </div>
+                            </li>
+                        ))}
                     </ul>
                 </Card>
             </div>
@@ -236,7 +239,9 @@ function VistaLicencias() {
     function VistaReporte() {
         const { month, year } = getDaysInMonth(currentDate);
         const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
-        const vacantes = {}, licenciasGrupo = {};
+        const vacantesPorDia = {}, licenciasPorMedico = {};
+        const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
         for(let d=1; d<=31; d++){
             const fObj = new Date(year, month, d); if(fObj.getMonth()!==month) break;
             const fStr = fObj.toISOString().split('T')[0], g = guardias[fStr], p = plantilla[fObj.getDay()];
@@ -245,56 +250,50 @@ function VistaLicencias() {
                 if(!s || s.estado!=='CUBIERTA' || s.tipoPago==='PERSONAL') return;
                 const m = medicos.find(x=>String(x.id)===String(s.medicoId)), r = s.prestadorId ? medicos.find(x=>String(x.id)===String(s.prestadorId)) : m;
                 if(!r) return;
-                const itm = { fecha: formatDate(d, month, year), receptor: r.nombre, sadofe: fObj.getDay()===0 || fObj.getDay()===6 };
-                if(!t?.medicoId) (vacantes[fObj.getDay()] = vacantes[fObj.getDay()] || []).push(itm);
+                const item = { fecha: formatDate(d, month, year), receptor: r.nombre, sadofe: fObj.getDay()===0 || fObj.getDay()===6, diaRaw: d };
+                if(!t?.medicoId) (vacantesPorDia[diasSemanaNombres[fObj.getDay()]] = vacantesPorDia[diasSemanaNombres[fObj.getDay()]] || []).push(item);
                 else if(String(t.medicoId) !== String(s.medicoId)) {
                     const tit = medicos.find(x=>String(x.id)===String(t.medicoId))?.nombre || 'Titular';
-                    (licenciasGrupo[tit] = licenciasGrupo[tit] || []).push(itm);
+                    (licenciasPorMedico[tit] = licenciasPorMedico[tit] || []).push(item);
                 }
             };
             [g.dia1, g.dia2, g.noche1, g.noche2].forEach((s, i) => check(s, [p?.dia1, p?.dia2, p?.noche1, p?.noche2][i]));
         }
 
+        const TablaReporte = ({ items }) => (
+            <table className="w-full text-[11px] border-collapse border border-gray-400 mb-6 bg-white">
+                <thead className="bg-gray-100">
+                    <tr><th className="border p-1 w-[15%]">Fecha</th><th className="border p-1 w-[10%]">12hs Sem</th><th className="border p-1 w-[10%]">24hs Sem</th><th className="border p-1 w-[10%] bg-blue-50">12hs SADOFE</th><th className="border p-1 w-[10%] bg-blue-50">24hs SADOFE</th><th className="border p-1 text-center w-[45%]">Recibo / Cobra</th></tr>
+                </thead>
+                <tbody>{items.map((it, idx) => (<tr key={idx} className="border-b"><td className="border p-1 text-center font-bold">{it.fecha}</td><td className="border p-1 text-center">{!it.sadofe?'X':''}</td><td className="border p-1 text-center"></td><td className="border p-1 text-center bg-blue-50">{it.sadofe?'X':''}</td><td className="border p-1 text-center bg-blue-50"></td><td className="border p-1 font-bold text-blue-700 text-center uppercase">{it.receptor}</td></tr>))}</tbody>
+            </table>
+        );
+
         return (
-            <div id="reporte-ministerio" className="bg-white p-8 space-y-8">
-                <div className="flex justify-between items-center no-print border-b pb-4">
-                    <h2 className="text-2xl font-bold uppercase underline">Reporte Ministerio - {mesNombre} {year}</h2>
-                    <Button onClick={()=>handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`)}>Descargar PDF</Button>
+            <div id="reporte-ministerio" className="bg-white p-8 space-y-8 min-h-screen">
+                <div className="flex justify-between items-center no-print">
+                    <h2 className="text-2xl font-bold uppercase border-b-2 border-black pb-1">Guardias Pediatría - {mesNombre} {year}</h2>
+                    <Button onClick={()=>handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`)}>Descargar PDF</Button>
                 </div>
                 <div className="space-y-6">
-                    <h3 className="font-bold text-lg bg-gray-50 p-2 border">COBERTURA VACANTES</h3>
-                    {Object.entries(vacantes).map(([dia, items], idx) => (
-                        <table key={idx} className="w-full text-[11px] border-collapse border border-gray-400 mb-4">
-                            <thead className="bg-gray-100"><tr><th className="border p-1">Fecha</th><th className="border p-1">12hs Sem</th><th className="border p-1">SADOFE</th><th className="border p-1">Cobra</th></tr></thead>
-                            <tbody>{items.map((it, k)=>(<tr key={k}><td className="border p-1 text-center font-bold">{it.fecha}</td><td className="border p-1 text-center">{!it.sadofe?'X':''}</td><td className="border p-1 text-center font-bold">{it.sadofe?'X':''}</td><td className="border p-1 font-bold text-blue-700">{it.receptor}</td></tr>))}</tbody>
-                        </table>
-                    ))}
-                    <h3 className="font-bold text-lg bg-gray-50 p-2 border">COBERTURA LICENCIAS</h3>
-                    {Object.entries(licenciasGrupo).map(([tit, items], idx) => (
-                        <div key={idx} className="mb-4">
-                            <h4 className="font-bold text-xs uppercase mb-1">Licencia {tit}</h4>
-                            <table className="w-full text-[11px] border-collapse border border-gray-400">
-                                <thead className="bg-gray-100"><tr><th className="border p-1">Fecha</th><th className="border p-1">12hs Sem</th><th className="border p-1">SADOFE</th><th className="border p-1">Cobra</th></tr></thead>
-                                <tbody>{items.map((it, k)=>(<tr key={k}><td className="border p-1 text-center font-bold">{it.fecha}</td><td className="border p-1 text-center">{!it.sadofe?'X':''}</td><td className="border p-1 text-center font-bold">{it.sadofe?'X':''}</td><td className="border p-1 font-bold text-blue-700">{it.receptor}</td></tr>))}</tbody>
-                            </table>
-                        </div>
-                    ))}
+                    <h3 className="font-bold text-lg uppercase bg-gray-50 p-2 border">COBERTURA DE CARGOS VACANTES</h3>
+                    {Object.entries(vacantesPorDia).map(([dia, itms], i) => (<div key={i}><h4 className="font-bold text-xs uppercase mb-1 border-b">Cargo Vacante Pediatra {dia.toUpperCase()}</h4><TablaReporte items={itms} /></div>))}
+                    <h3 className="font-bold text-lg uppercase bg-gray-50 p-2 border">COBERTURA DE LICENCIAS</h3>
+                    {Object.entries(licenciasPorMedico).map(([tit, itms], i) => (<div key={i}><h4 className="font-bold text-xs uppercase mb-1 border-b">Licencia {tit.toUpperCase()}</h4><TablaReporte items={itms} /></div>))}
                 </div>
             </div>
         );
     }
-
-    function VistaBusqueda() {
+                     function VistaBusqueda() {
         const [mode, setMode] = useState('masivo');
         const [reporteMes, setReporteMes] = useState(new Date().toISOString().slice(0, 7));
         const [selMedicos, setSelMedicos] = useState([]);
-        const [resMasivo, setResMasivo] = useState([]);
+        const [genResult, setGenResult] = useState([]);
 
-        const generarReporte = () => {
-            const results = [];
-            const [y, m] = reporteMes.split('-').map(Number); const days = new Date(y, m, 0).getDate();
+        const generarMasivos = async () => {
+            const files = []; const [y, m] = reporteMes.split('-').map(Number); const days = new Date(y, m, 0).getDate();
             for(let id of selMedicos){
-                const med = medicos.find(x=>String(x.id)===String(id)); let tot = 0;
+                const med = medicos.find(x=>String(x.id)===String(id)); let count = 0;
                 for(let d=1; d<=days; d++){
                     const fStr = `${y}-${m.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
                     const g = guardias[fStr], p = plantilla[new Date(y, m-1, d).getDay()];
@@ -302,51 +301,62 @@ function VistaLicencias() {
                     [g.dia1, g.dia2, g.noche1, g.noche2].forEach((s,i)=>{
                         if(!s || s.estado!=='CUBIERTA' || s.tipoPago==='PERSONAL') return;
                         const cobrador = s.prestadorId ? String(s.prestadorId) : String(s.medicoId);
-                        const titular = [p?.dia1, p?.dia2, p?.noche1, p?.noche2][i]?.medicoId;
-                        if(cobrador === String(id) && String(titular)!==String(id)) tot++;
+                        const titularId = [p?.dia1, p?.dia2, p?.noche1, p?.noche2][i]?.medicoId;
+                        if(cobrador === String(id) && String(titularId)!==String(id)) count++;
                     });
                 }
-                results.push({ nombre: med.nombre, total: tot, excedido: tot > 10 });
+                files.push({ nombre: med.nombre, total: count, excedido: count > 10 });
             }
-            setResMasivo(results);
+            setGenResult(files);
         };
 
         return (
-            <Card>
-                <div className="flex gap-4 border-b mb-4 pb-2">
-                    <button onClick={()=>setMode('masivo')} className={`font-bold uppercase text-xs ${mode==='masivo'?'text-blue-600 border-b-2 border-blue-600':''}`}>Reportes Masivos</button>
-                    <button onClick={()=>setMode('derivadas')} className={`font-bold uppercase text-xs ${mode==='derivadas'?'text-blue-600 border-b-2 border-blue-600':''}`}>Buscar Derivadas</button>
+            <Card className="space-y-6">
+                <div className="flex gap-4 border-b pb-2 mb-4">
+                    <button onClick={()=>setMode('masivo')} className={`font-bold uppercase text-xs ${mode==='masivo'?'text-blue-600 border-b-2 border-blue-600':''}`}>📄 Reportes Masivos (Control Topes)</button>
+                    <button onClick={()=>setMode('derivadas')} className={`font-bold uppercase text-xs ${mode==='derivadas'?'text-blue-600 border-b-2 border-blue-600':''}`}>🔍 Buscar Derivadas</button>
                 </div>
-                {mode === 'masivo' && <div className="space-y-4">
-                    <input type="month" className="border p-2 rounded" value={reporteMes} onChange={e=>setReporteMes(e.target.value)}/>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border p-3 rounded h-40 overflow-y-auto">
-                        {medicosOrdenados.map(m=>(<label key={m.id} className="text-xs flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={selMedicos.includes(m.id)} onChange={()=>setSelMedicos(p=>p.includes(m.id)?p.filter(x=>x!==m.id):[...p,m.id])}/>{m.nombre}</label>))}
+                {mode === 'masivo' && (
+                    <div className="space-y-4">
+                        <div className="flex gap-4 items-center bg-indigo-50 p-4 rounded border border-indigo-200">
+                            <input type="month" className="border p-2 rounded" value={reporteMes} onChange={e=>setReporteMes(e.target.value)}/>
+                            <Button onClick={generarMasivos}>Verificar Unidades</Button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border p-3 rounded h-60 overflow-y-auto bg-white shadow-inner">
+                            {medicosOrdenados.map(m=>(<label key={m.id} className="text-xs flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-gray-50"><input type="checkbox" checked={selMedicos.includes(m.id)} onChange={()=>setSelMedicos(p=>p.includes(m.id)?p.filter(x=>x!==m.id):[...p,m.id])}/>{m.nombre}</label>))}
+                        </div>
+                        <div className="mt-6 space-y-2">
+                            {genResult.map((r,i)=>(<div key={i} className={`p-3 border rounded-lg flex justify-between items-center shadow-sm ${r.excedido?'bg-red-50 border-red-200 text-red-700 font-bold':'bg-green-50'}`}><span>{r.nombre}</span><span>{r.total} Unidades {r.excedido?'(EXCEDE 10)':''}</span></div>))}
+                        </div>
                     </div>
-                    <Button onClick={generarReporte}>Verificar Topes</Button>
-                    {resMasivo.length > 0 && <div className="mt-4 space-y-2">
-                        {resMasivo.map((r,i)=>(<div key={i} className={`p-2 border rounded flex justify-between items-center ${r.excedido?'bg-red-50 border-red-200 text-red-700 font-bold':'bg-green-50'}`}><span>{r.nombre}</span><span className="font-bold">{r.total} u. {r.excedido && "(EXCEDE 10)"}</span></div>))}
-                    </div>}
-                </div>}
+                )}
             </Card>
         );
     }
 
     function VistaConfig() {
-        const [editing, setEditing] = useState(null);
+        const [editingDay, setEditingDay] = useState(null);
         return (
             <div className="space-y-6">
-                <Card><h3 className="font-bold mb-4 flex items-center gap-2"><LayoutTemplate/> Plantilla Base</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map((d,i)=>(<button key={i} onClick={()=>setEditing(i)} className="p-3 bg-gray-50 border rounded text-sm hover:bg-blue-50 font-bold text-blue-800">{d}</button>))}</div></Card>
-                <Card><h3 className="font-bold mb-4 flex items-center gap-2"><Users/> Médicos</h3>
-                <table className="w-full text-sm"><tbody>{medicosOrdenados.map(m=>(<tr key={m.id} className="hover:bg-gray-50"><td className="border p-2 font-medium">{m.nombre}</td><td className="border p-2 text-right"><button onClick={()=>dbBorrarMedico(m.id)} className="text-red-500"><Trash2 size={16}/></button></td></tr>))}</tbody></table></Card>
-                {editing !== null && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><Card className="w-full max-w-lg shadow-2xl"><h3 className="font-bold mb-4 border-b pb-2 uppercase text-blue-600">Configurar: {['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'][editing]}</h3>
-                {['dia1','dia2','noche1','noche2'].map(k=>(<div key={k} className="mb-3"><label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">{k}</label><select className="w-full text-sm border p-2 rounded" value={plantilla[editing]?.[k]?.medicoId||''} onChange={e=>dbGuardarPlantilla(editing, {...(plantilla[editing]||{}), [k]:{medicoId:e.target.value}})}><option value="">Vacante...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>))}
-                <div className="mt-4 flex justify-end"><Button onClick={()=>setEditing(null)} variant="primary">Guardar</Button></div></Card></div>}
+                <Card>
+                    <h3 className="font-bold mb-4 flex items-center gap-2"><LayoutTemplate/> Plantilla Semanal Base</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">{['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map((d,i)=>(<button key={i} onClick={()=>setEditingDay((i+1)%7)} className="p-4 bg-gray-50 border rounded text-sm hover:bg-blue-50 font-bold text-blue-800 transition-all">{d}</button>))}</div>
+                </Card>
+                <Card><h3 className="font-bold mb-4">Gestión de Médicos</h3><table className="w-full text-sm"><tbody>{medicosOrdenados.map(m=>(<tr key={m.id} className="border-b hover:bg-gray-50"><td className="p-2 font-medium">{m.nombre}</td><td className="p-2 text-right"><button onClick={()=>dbBorrarMedico(m.id)} className="text-red-500"><Trash2/></button></td></tr>))}</tbody></table></Card>
+                {editingDay !== null && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                        <Card className="w-full max-w-lg shadow-2xl">
+                            <h3 className="font-bold mb-4 uppercase text-blue-600 border-b pb-2">Configurar Día Index: {editingDay}</h3>
+                            {['dia1','dia2','noche1','noche2'].map(k=>(<div key={k} className="mb-3"><label className="text-[10px] font-bold text-gray-500 uppercase">{k}</label><select className="w-full text-sm border p-2 rounded" value={plantilla[editingDay]?.[k]?.medicoId||''} onChange={e=>dbGuardarPlantilla(editingDay, {...(plantilla[editingDay]||{}), [k]:{medicoId:e.target.value}})}><option value="">Vacante...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>))}
+                            <div className="mt-4 flex justify-end"><Button onClick={()=>setEditingDay(null)}>Cerrar</Button></div>
+                        </Card>
+                    </div>
+                )}
             </div>
         );
     }
 
-    function renderView() {
+    const renderView = () => {
         switch(view) {
             case 'calendario': return <VistaCalendario />;
             case 'licencias': return <VistaLicencias />;
@@ -355,18 +365,18 @@ function VistaLicencias() {
             case 'config': return <VistaConfig />;
             default: return <VistaCalendario />;
         }
-    }
+    };
 
-    if (!user) return <div className="h-screen flex items-center justify-center text-blue-600 font-bold animate-pulse bg-gray-50 flex-col gap-4"><div>Gestor de Guardias</div><div className="text-sm text-gray-400 font-normal">Conectando a Firebase...</div></div>;
+    if (!user) return <div className="h-screen flex items-center justify-center text-blue-600 font-bold animate-pulse text-xl">Iniciando Base de Datos...</div>;
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
             <nav className="bg-white shadow p-4 mb-6 flex gap-4 overflow-x-auto sticky top-0 z-40 border-b">
-                <button onClick={()=>setView('calendario')} className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all flex items-center gap-2 ${view==='calendario'?'bg-blue-600 text-white font-bold shadow-lg':'text-gray-500 hover:bg-gray-100'}`}><CalendarIcon/> Calendario</button>
-                <button onClick={()=>setView('licencias')} className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all flex items-center gap-2 ${view==='licencias'?'bg-blue-600 text-white font-bold shadow-lg':'text-gray-500 hover:bg-gray-100'}`}><Umbrella/> Licencias</button>
-                <button onClick={()=>setView('reporte')} className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all flex items-center gap-2 ${view==='reporte'?'bg-blue-600 text-white font-bold shadow-lg':'text-gray-500 hover:bg-gray-100'}`}><FileText/> Reporte</button>
-                <button onClick={()=>setView('busqueda')} className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all flex items-center gap-2 ${view==='busqueda'?'bg-blue-600 text-white font-bold shadow-lg':'text-gray-500 hover:bg-gray-100'}`}><Search/> Búsqueda</button>
-                <button onClick={()=>setView('config')} className={`ml-auto p-2 rounded-full transition-all ${view==='config'?'bg-blue-600 text-white shadow-lg':'text-gray-500 hover:bg-gray-100'}`}><Settings size={20}/></button>
+                <button onClick={()=>setView('calendario')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${view==='calendario'?'bg-blue-600 text-white font-bold':'text-gray-500'}`}><CalendarIcon/> Calendario</button>
+                <button onClick={()=>setView('licencias')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${view==='licencias'?'bg-blue-600 text-white font-bold':'text-gray-500'}`}><Umbrella/> Licencias</button>
+                <button onClick={()=>setView('reporte')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${view==='reporte'?'bg-blue-600 text-white font-bold':'text-gray-500'}`}><FileText/> Reporte Ministerio</button>
+                <button onClick={()=>setView('busqueda')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${view==='busqueda'?'bg-blue-600 text-white font-bold':'text-gray-500'}`}><Search/> Masivos/Topes</button>
+                <button onClick={()=>setView('config')} className="ml-auto p-2"><Settings size={20}/></button>
             </nav>
             <main className="max-w-7xl mx-auto px-4">{renderView()}</main>
         </div>
