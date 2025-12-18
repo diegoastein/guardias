@@ -20,39 +20,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <style>
-        /* Ajustes globales */
-        html, body { overflow-x: hidden; width: 100%; position: relative; }
-        
-        /* Scrollbars */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        .w-scroll-container {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            width: 100%;
-            padding-bottom: 0.5rem;
-        }
-        .grid-responsive-fill {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1.5rem;
-        }
-        /* Clase para ocultar elementos de la vista pero mantenerlos en el DOM para html2canvas */
-        .off-screen-render {
-            position: absolute;
-            left: -9999px;
-            top: -9999px;
-            width: 800px; /* Ancho fijo A4 aprox */
-        }
-        /* Estilos para evitar cortes de página en el PDF */
-        .avoid-break {
-            page-break-inside: avoid;
-        }
-    </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-100 text-gray-900">
 
