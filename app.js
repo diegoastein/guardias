@@ -1,6 +1,1203 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+
+<script type="text/babel" data-type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
     import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
     const { useState, useEffect, useMemo, useRef } = React;
     const { jsPDF } = window.jspdf;
+
+    // ==============================================================================================
+    // ⚠️ TUS CREDENCIALES REALES ⚠️
+    // (Mantengo las credenciales originales para que la app siga funcionando)
+    // ==============================================================================================
+    
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6AKWdDANzAjr5OHeskhT_KF_Gyco2fVY",
+      authDomain: "guardias-5c5d9.firebaseapp.com",
+      projectId: "guardias-5c5d9",
+      storageBucket: "guardias-5c5d9.firebasestorage.app",
+      messagingSenderId: "954058300552",
+      appId: "1:954058300552:web:00135945002743e223d33d"
+    };
+
+    // ==============================================================================================
+
+    // --- INICIALIZACIÓN ---
+    let app, db, auth;
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+    } catch (e) {
+        console.error("Error inicializando Firebase:", e);
+    }
+
+    // --- ÍCONOS ---
+    const IconWrapper = ({ children, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
+    const Umbrella = () => <IconWrapper><path d="M22 12A10 10 0 0 0 12 2v20"/><path d="M6 12a6 6 0 0 1 12 0"/></IconWrapper>;
+    const LayoutTemplate = () => <IconWrapper><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></IconWrapper>;
+    const Settings = () => <IconWrapper><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconWrapper>;
+    const Trash2 = () => <IconWrapper><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
+    const Edit = () => <IconWrapper><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></IconWrapper>;
+    const XCircle = () => <IconWrapper><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></IconWrapper>;
+    const CheckCircle = () => <IconWrapper><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
+    const Search = () => <IconWrapper><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
+    const Clipboard = () => <IconWrapper><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
+    const CloudUpload = () => <IconWrapper><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></IconWrapper>;
+    const CalendarIcon = () => <IconWrapper><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
+    const Upload = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper>;
+    const Download = () => <IconWrapper><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
+    const ShareIcon = () => <IconWrapper><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></IconWrapper>;
+    const ChevronLeft = () => <IconWrapper><polyline points="15 18 9 12 15 6" /></IconWrapper>;
+    const ChevronRight = () => <IconWrapper><polyline points="9 18 15 12 9 6" /></IconWrapper>;
+    const Users = () => <IconWrapper><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
+    const FileText = () => <IconWrapper><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
+    const AlertOctagon = () => <IconWrapper className="text-red-500"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
+
+    const Card = ({ children, className = "", id="" }) => <div id={id} className={`bg-white rounded-lg shadow p-4 ${className}`}>{children}</div>;
+    const Button = ({ onClick, children, variant = "primary", className = "", disabled=false, title="" }) => {
+        const styles = {
+            primary: "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300",
+            secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:bg-gray-50",
+            danger: "bg-red-100 text-red-600 hover:bg-red-200",
+            success: "bg-green-600 text-white hover:bg-green-700",
+            warning: "bg-orange-500 text-white hover:bg-orange-600",
+            dark: "bg-gray-800 text-white hover:bg-gray-900 disabled:bg-gray-600",
+            whatsapp: "bg-green-500 text-white hover:bg-green-600"
+        };
+        return <button onClick={onClick} disabled={disabled} className={`px-4 py-2 rounded-md transition-colors font-medium flex items-center justify-center gap-2 ${styles[variant]} ${className}`} title={title}>{children}</button>;
+    };
+
+    function App() {
+        const [view, setView] = useState('calendario');
+        const [currentDate, setCurrentDate] = useState(new Date());
+        const [loadingPdf, setLoadingPdf] = useState(false);
+        const [user, setUser] = useState(null);
+
+        // --- ESTADOS LOCALES ---
+        const [medicos, setMedicos] = useState([]);
+        const [licencias, setLicencias] = useState([]);
+        const [guardias, setGuardias] = useState({});
+        const [plantilla, setPlantilla] = useState({});
+
+        // --- FIREBASE LISTENERS ---
+        useEffect(() => {
+            const iniciar = async () => {
+                try {
+                    await signInAnonymously(auth);
+                } catch (e) {
+                    console.error("Error Auth:", e);
+                }
+            };
+            iniciar();
+            
+            const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+            return () => unsub();
+        }, []);
+
+        useEffect(() => {
+            if (!user) return;
+            const unsubMedicos = onSnapshot(collection(db, 'medicos'), (snap) => setMedicos(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+            const unsubLicencias = onSnapshot(collection(db, 'licencias'), (snap) => setLicencias(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+            const unsubGuardias = onSnapshot(collection(db, 'guardias'), (snap) => { const d = {}; snap.docs.forEach(x => d[x.id] = x.data()); setGuardias(d); });
+            const unsubPlantilla = onSnapshot(collection(db, 'plantilla'), (snap) => { const d = {}; snap.docs.forEach(x => d[x.id] = x.data()); setPlantilla(d); });
+            return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); };
+        }, [user]);
+
+        const medicosOrdenados = useMemo(() => [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre)), [medicos]);
+
+        // --- WRAPPERS DB ---
+        const dbAgregarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
+        const dbEditarMedico = async (medico) => { await setDoc(doc(db, 'medicos', String(medico.id)), medico); };
+        const dbBorrarMedico = async (id) => { await deleteDoc(doc(db, 'medicos', String(id))); };
+        const dbAgregarLicencia = async (lic) => { await setDoc(doc(db, 'licencias', String(lic.id)), lic); };
+        const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, 'licencias', String(id))); };
+        const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, 'guardias', fechaStr), data); };
+        const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); };
+
+        const dbBatchGuardias = async (nuevasGuardias) => {
+            const batch = writeBatch(db);
+            Object.entries(nuevasGuardias).forEach(([fecha, data]) => batch.set(doc(db, 'guardias', fecha), data));
+            await batch.commit();
+        };
+
+        const dbBatchPlantilla = async (nuevaPlantilla) => {
+            const batch = writeBatch(db);
+            Object.entries(nuevaPlantilla).forEach(([dia, data]) => batch.set(doc(db, 'plantilla', dia.toString()), data));
+            await batch.commit();
+        };
+
+        // --- HELPERS ---
+        const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, month, year }; };
+        const formatDate = (d, m, y) => `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`;
+        const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
+        const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
+        const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && lic.hasta);
+        
+        // --- MOTOR PDF + SHARE ---
+        const handleExportAction = (elementId, filename, action = 'download') => {
+            const input = document.getElementById(elementId); 
+            if(!input) return;
+            
+            if (!window.html2canvas || !window.jspdf) { 
+                alert("Librerías PDF cargando... intenta de nuevo en unos segundos."); 
+                return; 
+            }
+
+            setLoadingPdf(true);
+            window.scrollTo(0, 0); 
+
+            const clone = input.cloneNode(true);
+            
+            if (elementId === 'plantilla-print') {
+                 clone.style.width = "800px"; 
+                 const grid = clone.querySelector('.grid-responsive-fill');
+                 if(grid) { grid.style.display = 'block'; grid.style.gap = '0'; }
+                 const cards = clone.querySelectorAll('.relative.border');
+                 cards.forEach(c => { c.style.marginBottom = '20px'; c.style.border = '1px solid #ccc'; c.style.pageBreakInside = 'avoid'; });
+            } else if (elementId === 'reporte-ministerio') {
+                // Aumentar el ancho para que la tabla quepa mejor en el PDF
+                clone.style.width = "1200px"; 
+            } else {
+                 clone.style.width = "1000px"; 
+            }
+
+            clone.style.position = "absolute"; clone.style.top = "-9999px"; clone.style.left = "0"; clone.style.background = "#ffffff"; clone.style.zIndex = "-1"; clone.style.padding = "20px";
+            clone.classList.remove('shadow', 'shadow-lg', 'shadow-md', 'rounded-lg', 'rounded'); clone.style.boxShadow = 'none'; clone.style.borderRadius = '0';
+            
+            const elementsToRemove = clone.querySelectorAll('button, .no-print'); elementsToRemove.forEach(el => el.remove());
+            const titles = clone.querySelectorAll('.print-title'); titles.forEach(el => { el.style.display = 'block'; el.classList.remove('hidden'); });
+            
+            document.body.appendChild(clone);
+
+            setTimeout(() => {
+                window.html2canvas(clone, { scale: 1.0, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1000, logging: false }).then((canvas) => {
+                    const imgData = canvas.toDataURL('image/jpeg', 0.70);
+                    const imgWidth = 210; const pageHeight = 295; const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', imgHeight > pageHeight ? [imgWidth, imgHeight + 20] : 'a4');
+                    pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+                    
+                    if (action === 'share') {
+                        const pdfBlob = pdf.output('blob');
+                        const file = new File([pdfBlob], `${filename}.pdf`, { type: 'application/pdf' });
+                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                            navigator.share({ files: [file], title: filename, text: `Adjunto reporte: ${filename}`, }).catch(err => console.log('Error sharing:', err));
+                        } else {
+                            pdf.save(`${filename}.pdf`);
+                             window.open("https://web.whatsapp.com", "_blank");
+                             alert("Archivo descargado. Arrástralo a WhatsApp Web para enviarlo.");
+                        }
+                    } else {
+                        pdf.save(`${filename}.pdf`);
+                    }
+                    document.body.removeChild(clone); setLoadingPdf(false);
+                }).catch(err => { console.error("Error PDF:", err); if(document.body.contains(clone)) document.body.removeChild(clone); setLoadingPdf(false); alert("Error al generar PDF: " + (err.message || err)); });
+            }, 500);
+        };
+
+        // --- VISTAS (Declaradas como funciones internas para resolver ReferenceError) ---
+        
+        // ***************************************************************
+        // VISTA CALENDARIO (MOVING HERE TO RESOLVE ReferenceError)
+        // ***************************************************************
+        function VistaCalendario() {
+            const { days, firstDay, month, year } = getDaysInMonth(currentDate);
+            const [selectedDay, setSelectedDay] = useState(null); 
+            const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+            const firstDayVisual = (firstDay + 6) % 7;
+            const today = new Date();
+            const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+
+            const aplicarPlantilla = () => {
+                if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
+                const nuevas = {};
+                for (let d = 1; d <= days; d++) {
+                    const fObj = new Date(year, month, d);
+                    const tDay = plantilla[fObj.getDay()];
+                    if (tDay) nuevas[fObj.toISOString().split('T')[0].slice(0, 10)] = tDay; // Usar slice(0, 10) para asegurar formato YYYY-MM-DD
+                }
+                dbBatchGuardias(nuevas);
+            };
+            const repetirSemanaAnterior = () => {
+                if (!confirm("¿Rellenar huecos con semana anterior?")) return;
+                const nuevas = {};
+                let count = 0;
+                for (let d = 1; d <= days; d++) {
+                    const hoy = new Date(year, month, d);
+                    const fStrHoy = hoy.toISOString().split('T')[0].slice(0, 10);
+                    if (guardias[fStrHoy]) continue; 
+                    const atras = new Date(year, month, d - 7);
+                    const fStrAtras = atras.toISOString().split('T')[0].slice(0, 10);
+                    const gAtras = guardias[fStrAtras];
+                    if(gAtras) { nuevas[fStrHoy] = gAtras; count++; }
+                }
+                dbBatchGuardias(nuevas);
+                alert(`Se completaron ${count} días.`);
+            };
+            const EditGuardiaModal = () => {
+                if (!selectedDay) return null;
+                const fechaStr = new Date(year, month, selectedDay).toISOString().split('T')[0].slice(0, 10);
+                const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+                const guardiaActual = guardias[fechaStr] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
+                const [form, setForm] = useState(guardiaActual);
+                
+                const SlotForm = ({ label, slotData, onChangeSlot }) => {
+                    const data = slotData || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+                    const medicoSeleccionado = medicos.find(m => String(m.id) === String(data.medicoId));
+                    const puedeDerivar = data.tipoPago === 'SISTEMA' && medicoSeleccionado && medicoSeleccionado.tieneRecibo;
+                    const necesitaPrestamista = data.tipoPago === 'SISTEMA' && medicoSeleccionado && (!medicoSeleccionado.tieneRecibo || data.derivado);
+                    const medicosDisponibles = medicosOrdenados.filter(m => !estaDeLicencia(m.id, fechaStr));
+                    const prestadoresDisponibles = medicosOrdenados.filter(m => m.tieneRecibo && !estaDeLicencia(m.id, fechaStr));
+
+                    return (
+                        <div className="bg-gray-50 p-2 border mb-2 text-sm">
+                            <div className="font-bold mb-1">{label}</div>
+                            <select className="w-full mb-1 border" value={data.estado} onChange={e => onChangeSlot({...data, estado: e.target.value})}>
+                                <option value="CUBIERTA">Cubierta</option><option value="VACANTE">Vacante</option><option value="LICENCIA_SIAPE">Licencia</option>
+                            </select>
+                            {data.estado === 'CUBIERTA' && <>
+                                <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => {
+                                    const newMedicoId = e.target.value;
+                                    const newMedico = medicos.find(m => String(m.id) === String(newMedicoId));
+                                    let newPrestadorId = data.prestadorId;
+                                    if (newMedico && !newMedico.tieneRecibo) {
+                                    } else {
+                                        if (!data.derivado) newPrestadorId = ''; 
+                                    }
+                                    onChangeSlot({...data, medicoId: newMedicoId, prestadorId: newPrestadorId});
+                                }}>
+                                    <option value="">Médico</option>
+                                    {medicosDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                </select>
+                                <select className="w-full mb-1 border" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}><option value="SISTEMA">Sistema</option><option value="PERSONAL">Personal</option></select>
+                                {puedeDerivar && (<div className="flex items-center mb-1"><input type="checkbox" checked={data.derivado || false} onChange={e => { const esDerivado = e.target.checked; onChangeSlot({ ...data, derivado: esDerivado, prestadorId: esDerivado ? data.prestadorId : '' }); }} /> <label className="ml-1 text-xs text-gray-600 cursor-pointer">Derivar cobro (Recibo de otro)</label></div>)}
+                                {necesitaPrestamista && (<select className="w-full border bg-yellow-100" value={data.prestadorId||''} onChange={e=>onChangeSlot({...data, prestadorId: e.target.value})}><option value="">Cobra...</option>{prestadoresDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select>)}
+                            </>}
+                        </div>
+                    );
+                };
+                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar Guardia del {formatDate(selectedDay, month, year)}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}}>Guardar</Button></div></div></div>);
+            };
+            
+            const renderCell = (day) => {
+                const fStr = new Date(year, month, day).toISOString().split('T')[0].slice(0, 10);
+                const g = guardias[fStr];
+
+                // Obtener datos de plantilla para este día
+                const fechaObj = new Date(year, month, day);
+                const dayOfWeek = fechaObj.getDay(); // 0 (Sun) to 6 (Sat)
+                const p = plantilla[dayOfWeek]; // Template for this day
+
+                const slots = [ 
+                    { data: g?.dia1, template: p?.dia1, type: 'dia' }, 
+                    { data: g?.dia2, template: p?.dia2, type: 'dia' }, 
+                    { data: g?.noche1, template: p?.noche1, type: 'noche' }, 
+                    { data: g?.noche2, template: p?.noche2, type: 'noche' } 
+                ];
+                
+                const renderSlot = (slot, index) => {
+                    const isEmpty = !slot.data || slot.data.estado === 'VACANTE' || !slot.data.medicoId;
+                    
+                    // 1. Caso VACANTE (No cubierta)
+                    if (isEmpty) return (<div key={index} className="flex-1 bg-red-100 border border-red-300 text-red-600 text-xs font-bold flex items-center justify-center rounded-sm">VACANTE</div>);
+                    
+                    const m = medicos.find(x => String(x.id) === String(slot.data.medicoId));
+                    const enLicencia = m && estaDeLicencia(m.id, fStr);
+                    
+                    let bgClass = "bg-green-100 border-green-300 text-green-900"; // Default: Cubierta normal (Propia, Extra o de Sistema)
+                    let titleText = m ? m.nombre : '?';
+                    
+                    // Lógica de Clasificación de Cobertura
+                    const titularId = slot.template?.medicoId;
+                    const isVacanteOriginal = !titularId;
+                    
+                    // Determinar si el titular está en licencia (o si el slot tiene estado LICENCIA_SIAPE)
+                    const titularEnLicencia = titularId && estaDeLicencia(titularId, fStr);
+
+                    // 2. Prioridad: ARREGLO PERSONAL
+                    if (slot.data.tipoPago === 'PERSONAL') {
+                        bgClass = "bg-orange-100 border-orange-300 text-orange-900 font-medium";
+                        titleText = `${titleText} (Arreglo Personal)`;
+                    } 
+                    
+                    // 3. Prioridad: LICENCIA CUBIERTA (SIAPE o Titular de Licencia cubierto)
+                    else if (slot.data.estado === 'LICENCIA_SIAPE' || titularEnLicencia) {
+                        bgClass = "bg-purple-100 border-purple-300 text-purple-800 font-medium";
+                        titleText = `${titleText} (Cubre Licencia)`;
+                    }
+                    
+                    // 4. Prioridad: VACANTE CUBIERTA (Originalmente sin titular)
+                    else if (isVacanteOriginal) {
+                        bgClass = "bg-cyan-200 border-cyan-400 text-cyan-900 font-bold"; // MODIFICADO: Cyan más fuerte
+                        titleText = `${titleText} (Cubre Vacante)`;
+                    }
+                    
+                    // 5. Prioridad: DERIVADA A RECIBO (Cobra otro)
+                    else if (slot.data.prestadorId) {
+                        bgClass = "bg-blue-100 border-blue-300 text-blue-900 font-medium";
+                        const prestador = medicos.find(x => String(x.id) === String(slot.data.prestadorId));
+                        titleText = `${titleText} (Recibo: ${prestador ? prestador.nombre.split(',')[0] : '?'})`;
+                    }
+                    
+                    // 6. Prioridad MÁXIMA: ADVERTENCIA (Médico de turno en Licencia)
+                    if (enLicencia) {
+                        bgClass = "bg-red-600 border-red-700 text-white font-bold";
+                        titleText = `¡ADVERTENCIA! Médico de turno en LICENCIA.`;
+                    }
+
+                    const displayName = m ? m.nombre.split(',')[0] : '?'; 
+                    return (
+                        <div 
+                            key={index} 
+                            className={`flex-1 ${bgClass} px-1 border rounded-sm flex items-center overflow-hidden whitespace-nowrap text-xs`} 
+                            title={titleText}
+                        >
+                            {enLicencia && <span className="mr-1">⚠️</span>}
+                            <span className="truncate">{displayName}</span>
+                        </div>
+                    );
+                };
+                
+                return (<div className="flex flex-col h-full gap-1 p-1"><div className="flex flex-col gap-1 flex-1">{renderSlot(slots[0], 0)}{renderSlot(slots[1], 1)}</div><div className="h-[2px] bg-gray-300"></div><div className="flex flex-col gap-1 flex-1">{renderSlot(slots[2], 2)}{renderSlot(slots[3], 3)}</div></div>);
+            };
+            
+            const blanks = Array(firstDayVisual).fill(null);
+            const daysArray = Array.from({ length: days }, (_, i) => i + 1);
+            
+            // Componente de Leyenda de Colores (Implementación de la solicitud)
+            const ColorLegend = () => (
+                <Card className="mt-4 p-3 border-t">
+                    <h4 className="font-bold text-sm mb-2 text-gray-700">Leyenda de Colores:</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-orange-100 border border-orange-300"></div>
+                            <span>Arreglo Personal</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-purple-100 border border-purple-300"></div>
+                            <span>Cubre Licencia/SIAPE</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-cyan-200 border border-cyan-400"></div> {/* MODIFICADO: Cyan más fuerte */}
+                            <span>Cubre Vacante</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-green-100 border border-green-300"></div>
+                            <span>Titular/Extra Sistema</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-blue-100 border border-blue-300"></div>
+                            <span>Derivada (Recibo Otro)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-red-100 border border-red-300"></div>
+                            <span>VACANTE (No Cubierta)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-sm bg-red-600 border border-red-700"></div>
+                            <span>⚠️ Médico en Licencia</span>
+                        </div>
+                    </div>
+                </Card>
+            );
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><ChevronLeft/></button>
+                            <h2 className="font-bold text-2xl text-gray-800 capitalize min-w-[200px] text-center">{mesNombre}</h2>
+                            <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><ChevronRight/></button>
+                            <Button onClick={() => setCurrentDate(new Date())} variant="secondary" className="ml-4 text-sm">Hoy</Button>
+                        </div>
+                        <div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div>
+                    </div>
+                    <div className="w-scroll-container pb-4">
+                        <div className="min-w-[1200px]">
+                            <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
+                            <div className="grid grid-cols-7 gap-1">
+                                {blanks.map((_,i)=><div key={`b${i}`} className="h-48 bg-gray-100 rounded"></div>)}
+                                {daysArray.map(d=> (
+                                    <div 
+                                        key={d} 
+                                        onClick={()=>setSelectedDay(d)} 
+                                        className={`h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col ${isToday(d) ? 'ring-4 ring-blue-500 ring-inset bg-blue-50' : ''}`}
+                                    >
+                                        <div className={`text-right text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>{d}</div>
+                                        <div className="flex-1 h-full overflow-hidden">
+                                            {renderCell(d)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    {/* Nueva Leyenda de Colores */}
+                    <ColorLegend />
+                    {selectedDay && <EditGuardiaModal />}
+                </div>
+            );
+        }
+        // ***************************************************************
+        // FIN VISTA CALENDARIO
+        // ***************************************************************
+
+
+        function VistaMedicos() {
+             const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
+             const [filtroNombre, setFiltroNombre] = useState(''); const [listaMedicosVisible, setListaMedicosVisible] = useState([]); 
+             const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
+             const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
+             const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; 
+             const saveEdit = () => { dbEditarMedico(editForm); setEditingId(null); };
+             const buscarMedicos = () => {
+                 if (filtroNombre.trim() === '') { setListaMedicosVisible(medicosOrdenados); } 
+                 else { const filtrados = medicosOrdenados.filter(m => m.nombre.toLowerCase().includes(filtroNombre.toLowerCase())); setListaMedicosVisible(filtrados); }
+             };
+
+             useEffect(() => {
+                 setListaMedicosVisible(medicosOrdenados);
+             }, [medicosOrdenados]);
+
+
+            return ( 
+                <div className="space-y-6">
+                    <Card>
+                        <h3 className="text-lg font-bold mb-4">Agregar Médico</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div><label className="block text-sm text-gray-700">Nombre</label><input className="w-full p-2 border rounded" value={nuevo.nombre} onChange={e => setNuevo({...nuevo, nombre: e.target.value})} placeholder="Ej: Dr. Pérez" /></div>
+                            <div><label className="block text-sm text-gray-700">Tipo</label><select className="w-full p-2 border rounded" value={nuevo.tipo} onChange={e => setNuevo({...nuevo, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></div>
+                            <div className="flex items-center pb-3"><input type="checkbox" checked={nuevo.tieneRecibo} onChange={e => setNuevo({...nuevo, tieneRecibo: e.target.checked})} /> <label className="ml-2 text-sm">¿Recibo?</label></div>
+                            <Button onClick={agregar}>Agregar</Button>
+                        </div>
+                    </Card>
+                    <Card>
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar Médicos para Editar</h3>
+
+                        <div className="mb-4">
+                            <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-end">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Buscar médico</label>
+                                    <input
+                                        type="text"
+                                        value={filtroNombre}
+                                        onChange={(e) => { setFiltroNombre(e.target.value); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') buscarMedicos(); }}
+                                        placeholder="Buscar por nombre..."
+                                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                                    />
+                                </div>
+                                <Button onClick={buscarMedicos} className="md:w-auto w-full flex items-center justify-center gap-2">
+                                    <Search size={18}/> Buscar
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => { setFiltroNombre(''); setListaMedicosVisible(medicosOrdenados); }}
+                                    className="md:w-auto w-full"
+                                >
+                                    Limpiar
+                                </Button>
+                            </div>
+                        </div>
+
+                        {(listaMedicosVisible && listaMedicosVisible.length >= 0) && (
+                            <div className="w-scroll-container"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{listaMedicosVisible.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => dbBorrarMedico(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div>
+                        )}
+                        {!listaMedicosVisible && <p className="text-gray-400 italic text-center p-4">Realice una búsqueda para ver el listado.</p>}
+                    </Card>
+                </div> 
+            );
+        }
+
+        function VistaLicencias() {
+             const [nueva, setNueva] = useState({ medicoId: '', desde: '', hasta: '', motivo: 'Vacaciones', reemplazoIds: [], detalleCobertura: '' });
+             const [filtroLicencias, setFiltroLicencias] = useState('');
+             const [editingId, setEditingId] = useState(null);
+             const [editForm, setEditForm] = useState({});
+            const { month, year } = getDaysInMonth(currentDate); 
+            const mesStr = (month + 1).toString().padStart(2, '0'); 
+            const nextMonthDate = new Date(year, month + 1, 1);
+            const nextMonth = nextMonthDate.getMonth(); const nextYear = nextMonthDate.getFullYear(); const nextMesStr = (nextMonth + 1).toString().padStart(2, '0');
+            const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
+            const licenciasSiguienteMes = licencias.filter(lic => lic.desde.startsWith(`${nextYear}-${nextMesStr}`) || lic.hasta.startsWith(`${nextYear}-${nextMesStr}`));
+            const toggleReemplazo = (id) => { setNueva(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
+            const agregar = () => { if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); dbAgregarLicencia({ ...nueva, id: Date.now().toString(), medicoId: nueva.medicoId, reemplazoIds: nueva.reemplazoIds, motivo: nueva.motivo, detalleCobertura: nueva.detalleCobertura, desde: nueva.desde, hasta: nueva.hasta }); setNueva({ ...nueva, medicoId: '', reemplazoIds: [], detalleCobertura: '' }); };
+            const historialFiltrado = licencias.filter(lic => { if (!filtroLicencias) return false; const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return med && med.nombre.toLowerCase().includes(filtroLicencias.toLowerCase()); }).sort((a,b) => b.desde.localeCompare(a.desde));
+            const startEdit = (lic) => { setEditingId(lic.id); setEditForm({ ...lic, reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : []), detalleCobertura: lic.detalleCobertura || '' }); };
+            const saveEdit = async () => { await dbAgregarLicencia(editForm); setEditingId(null); };
+            const toggleReemplazoEdit = (id) => { setEditForm(prev => { const ids = prev.reemplazoIds.includes(id) ? prev.reemplazoIds.filter(x => x !== id) : [...prev.reemplazoIds, id]; return { ...prev, reemplazoIds: ids }; }); };
+            return ( <div className="space-y-6"><Card className="border border-yellow-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-yellow-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-yellow-800 flex items-center gap-2"><Umbrella/> Mes Actual ({currentDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasDelMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasDelMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div><div className="bg-blue-50 p-3 rounded"><h3 className="text-lg font-bold mb-2 text-blue-800 flex items-center gap-2"><CalendarIcon/> Mes Siguiente ({nextMonthDate.toLocaleString('es-ES', { month: 'long' })})</h3>{licenciasSiguienteMes.length === 0 ? <p className="text-sm text-gray-500 italic">No hay licencias programadas.</p> : <ul className="list-disc pl-5 text-sm text-gray-800">{licenciasSiguienteMes.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); return <li key={lic.id}><strong>{med ? med.nombre : '?'}</strong> ({lic.motivo}): {formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</li> })}</ul>}</div></div></Card><Card><h3 className="text-lg font-bold mb-4">Registrar Licencia</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start"><div><label className="block text-sm text-gray-700">Médico</label><select className="w-full p-2 border rounded" value={nueva.medicoId} onChange={e => setNueva({...nueva, medicoId: e.target.value})}><option value="">Seleccione...</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm text-gray-700">Motivo</label><select className="w-full p-2 border rounded" value={nueva.motivo} onChange={e => setNueva({...nueva, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div className="row-span-2"><label className="block text-sm text-gray-700 mb-1">Reemplazos Sugeridos (Selección Múltiple)</label><div className="border rounded p-2 h-32 overflow-y-auto bg-white">{medicosOrdenados.filter(m => m.tieneRecibo).map(m => (<label key={m.id} className="flex items-center gap-2 mb-1 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" checked={nueva.reemplazoIds.includes(m.id)} onChange={() => toggleReemplazo(m.id)}/>{m.nombre}</label>))}</div></div><div className="lg:col-span-2"><label className="block text-sm text-gray-700">Detalle Cobertura (Texto libre)</label><input type="text" className="w-full p-2 border rounded" placeholder="Ej: 4 y 5 Dr. Pérez, 6 Dra. Gómez..." value={nueva.detalleCobertura || ''} onChange={e => setNueva({...nueva, detalleCobertura: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Desde</label><input type="date" className="w-full p-2 border rounded" value={nueva.desde} onChange={e => setNueva({...nueva, desde: e.target.value})} /></div><div><label className="block text-sm text-gray-700">Hasta</label><input type="date" className="w-full p-2 border rounded" value={nueva.hasta} onChange={e => setNueva({...nueva, hasta: e.target.value})} /></div><Button onClick={agregar}>Registrar</Button></div></Card><Card><h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar en Historial para Editar/Eliminar</h3><div className="mb-4"><input type="text" className="w-full p-2 border rounded" placeholder="Buscar por nombre..." value={filtroLicencias} onChange={e => setFiltroLicencias(e.target.value)}/></div>{filtroLicencias.length > 0 ? (<ul className="divide-y divide-gray-200">{historialFiltrado.map(lic => { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); let replacementText = lic.detalleCobertura || (lic.reemplazoIds && lic.reemplazoIds.length > 0 ? lic.reemplazoIds.map(rid => medicos.find(m => String(m.id) === String(rid))?.nombre).join(', ') : (lic.reemplazoId ? medicos.find(m => String(m.id) === String(lic.reemplazoId))?.nombre : 'Sin detalle')); return (<li key={lic.id} className="py-4 flex flex-col gap-2"><div className="flex justify-between items-start"><div><p className="font-medium text-lg">{med ? med.nombre : 'Médico borrado'}</p><p className="text-sm font-semibold">{lic.motivo}</p><p className="text-sm text-gray-500">{formatDateISO(lic.desde)} al {formatDateISO(lic.hasta)}</p></div><div className="flex gap-2"><button onClick={() => startEdit(lic)} className="text-blue-600 text-sm hover:underline font-bold flex items-center gap-1"><Edit size={16}/></button><button onClick={() => dbBorrarLicencia(lic.id)} className="text-red-500 text-sm hover:underline flex items-center gap-1"><Trash2 size={16}/> Eliminar</button></div></div><div className="bg-gray-50 p-2 rounded text-sm"><span className="font-bold text-blue-600 block mb-1">Cubierto por:</span><p className="text-gray-800">{replacementText}</p></div></li>); })}</ul>) : <p className="text-gray-400 italic text-center p-4">Escribe un nombre para buscar.</p>}</Card>{editingId && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Editar Licencia</h3><div className="space-y-3"><div><label className="block text-sm font-medium">Médico</label><select className="w-full p-2 border rounded" value={editForm.medicoId} onChange={e => setEditForm({...editForm, medicoId: e.target.value})}>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm font-medium">Motivo</label><select className="w-full p-2 border rounded" value={editForm.motivo} onChange={e => setEditForm({...editForm, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm font-medium">Desde</label><input type="date" className="w-full p-2 border rounded" value={editForm.desde} onChange={e => setEditForm({...editForm, desde: e.target.value})} /></div><div><label className="block text-sm font-medium">Hasta</label><input type="date" className="w-full p-2 border rounded" value={editForm.hasta} onChange={e => setEditForm({...editForm, hasta: e.target.value})} /></div><div><label className="block text-sm font-medium">Detalle Cobertura</label><input className="w-full p-2 border rounded" value={editForm.detalleCobertura || ''} onChange={e => setEditForm({...editForm, detalleCobertura: e.target.value})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingId(null)}>Cancelar</Button><Button onClick={saveEdit}>Guardar Cambios</Button></div></div></div>)}</div> );
+        }
+
+        function VistaBusqueda() { 
+             const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
+             const [tituloReporte, setTituloReporte] = useState(''); 
+             const [editingLicenciaId, setEditingLicenciaId] = useState(null); const [editLicenciaForm, setEditLicenciaForm] = useState({});
+             // NUEVO ESTADO para modo derivadas
+             const [mesBusqueda, setMesBusqueda] = useState(new Date().toISOString().slice(0, 7));
+
+             // --- ESTADOS PARA REPORTE MASIVO ---
+             const [reporteMes, setReporteMes] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+             const [medicosSeleccionados, setMedicosSeleccionados] = useState([]);
+             const [generando, setGenerando] = useState(false);
+             const [resultadosMasivos, setResultadosMasivos] = useState([]); // { medico, blob, exceeded, filename }
+             const previewContainerRef = useRef(null);
+             // ------------------------------------
+
+             const startEditLicencia = (lic) => { setEditingLicenciaId(lic.id); setEditLicenciaForm({ ...lic, reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : []), detalleCobertura: lic.detalleCobertura || '' }); };
+             const saveEditLicencia = async () => { await dbAgregarLicencia(editLicenciaForm); setEditingLicenciaId(null); const updated = resultados.map(r => r.id === editLicenciaForm.id ? { ...editLicenciaForm, medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre } : r); setResultados(updated); };
+             
+             const buscar = () => {
+                if(mode !== 'derivadas' && mode !== 'masivo' && (!fechaDesde || !fechaHasta)) return alert("Seleccione fechas");
+
+                let titulo = `Reporte`;
+                const results = [];
+
+                // --- NUEVO MODO: DERIVADAS ---
+                if (mode === 'derivadas') {
+                    if (!mesBusqueda) return alert("Seleccione el mes");
+    
+                    const [yearStr, monthStr] = mesBusqueda.split('-');
+                    const year = parseInt(yearStr);
+                    const month = parseInt(monthStr) - 1; 
+                    const daysInMonth = new Date(year, month + 1, 0).getDate();
+                    
+                    titulo = `Guardias Derivadas/No Cobradas en ${monthStr}/${yearStr}`;
+
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        const fObj = new Date(year, month, d);
+                        const fStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; 
+                        const g = guardias[fStr]; 
+                        
+                        if (g) {
+                            const slots = [
+                                { s: g.dia1, n: 'Día 1' }, 
+                                { s: g.dia2, n: 'Día 2' }, 
+                                { s: g.noche1, n: 'Noche 1' }, 
+                                { s: g.noche2, n: 'Noche 2' }
+                            ]; 
+                            
+                            slots.forEach(slot => { 
+                                if (slot.s && slot.s.estado === 'CUBIERTA' && slot.s.medicoId && slot.s.tipoPago === 'SISTEMA') {
+                                    const medicoId = String(slot.s.medicoId);
+                                    const prestadorId = String(slot.s.prestadorId || '');
+                                    
+                                    // Condición: Se deriva el cobro si el prestadorId está seteado Y es diferente al medicoId que hizo la guardia.
+                                    if (prestadorId && medicoId !== prestadorId) {
+                                        const medicoQueHizo = medicos.find(m => String(m.id) === medicoId)?.nombre || '?';
+                                        const medicoQueCobra = medicos.find(m => String(m.id) === prestadorId)?.nombre || '?';
+                                        
+                                        results.push({ 
+                                            fecha: formatDateISO(fStr), 
+                                            turno: slot.n, 
+                                            hizo: medicoQueHizo,
+                                            recibo: medicoQueCobra,
+                                            tipo: 'Derivada a recibo'
+                                        });
+                                    }
+                                } 
+                            }); 
+                        } 
+                    } 
+                // --- FIN MODO: DERIVADAS ---
+                } else {
+                    const [y1, m1, d1] = fechaDesde.split('-').map(Number); const [y2, m2, d2] = fechaHasta.split('-').map(Number);
+                    const dateStart = new Date(y1, m1 - 1, d1); const dateEnd = new Date(y2, m2 - 1, d2);
+                
+                    titulo = `Reporte (${formatDateISO(fechaDesde)} al ${formatDateISO(fechaHasta)})`;
+
+                    if (mode === 'guardias' && medicoId) {
+                        const nombreMed = medicos.find(m => String(m.id) === String(medicoId))?.nombre || 'Médico';
+                        titulo = `Guardias de ${nombreMed} (${formatDateISO(fechaDesde)} al ${formatDateISO(fechaHasta)})`;
+                    } else if (mode === 'licencias') titulo = `Licencias (${formatDateISO(fechaDesde)} al ${formatDateISO(fechaHasta)})`;
+                    else if (mode === 'totales') titulo = `Resumen de Guardias (${formatDateISO(fechaDesde)} al ${formatDateISO(fechaHasta)})`;
+
+                    if(mode === 'licencias') { licencias.forEach(lic => { const [ly1, lm1, ld1] = lic.desde.split('-').map(Number); const [ly2, lm2, ld2] = lic.hasta.split('-').map(Number); const lInicio = new Date(ly1, lm1 - 1, ld1); const lFin = new Date(ly2, lm2 - 1, ld2); if (lInicio <= dateEnd && lFin >= dateStart) { const med = medicos.find(m => String(m.id) === String(lic.medicoId)); results.push({ ...lic, medicoNombre: med ? med.nombre : '?' }); } }); } 
+                    else if (mode === 'guardias' || mode === 'totales') { 
+                        if(mode === 'guardias' && !medicoId) return alert("Seleccione médico"); 
+                        const tempStats = {}; 
+                        let cursor = new Date(dateStart); 
+                        while (cursor <= dateEnd) { 
+                            const cy = cursor.getFullYear(); const cm = cursor.getMonth(); const cd = cursor.getDate(); 
+                            const fStr = `${cy}-${String(cm+1).padStart(2,'0')}-${String(cd).padStart(2,'0')}`; 
+                            const g = guardias[fStr]; 
+                            const dayOfWeek = cursor.getDay();
+                            const p = plantilla[dayOfWeek];
+
+                            if(g) { 
+                                const slots = [ { s: g.dia1, t: p?.dia1, n: 'Día 1' }, { s: g.dia2, t: p?.dia2, n: 'Día 2' }, { s: g.noche1, t: p?.noche1, n: 'Noche 1' }, { s: g.noche2, t: p?.noche2, n: 'Noche 2' } ]; 
+                                slots.forEach(slot => { 
+                                    if(slot.s && slot.s.estado === 'CUBIERTA' && slot.s.medicoId) { 
+                                        const mId = String(slot.s.medicoId); 
+                                        if (mode === 'guardias' && mId !== String(medicoId)) return; 
+                                        
+                                        let tipo = 'Extra'; 
+                                        const titularId = slot.t?.medicoId ? String(slot.t.medicoId) : null; 
+                                        if (titularId === mId) { tipo = 'Propia'; } 
+                                        else if (!titularId) { tipo = 'Cobertura Vacante'; } 
+                                        else { const titularEnLicencia = estaDeLicencia(titularId, fStr); const nombreTitular = medicos.find(m=>String(m.id)===titularId)?.nombre || '?'; if (titularEnLicencia) { tipo = `Cobertura Licencia (${nombreTitular})`; } else { tipo = `Cubriendo a (${nombreTitular})`; } } 
+                                        
+                                        if(slot.s.tipoPago === 'PERSONAL') tipo += ' (Arreglo)'; 
+                                        if (slot.s.prestadorId) { const prestadorName = medicos.find(m => String(m.id) === String(slot.s.prestadorId))?.nombre || '?'; tipo += ` (Recibo: ${prestadorName})`; }
+                                        
+                                        if (mode === 'guardias') { results.push({ fecha: formatDateISO(fStr), turno: slot.n, tipo: tipo }); } 
+                                        else { 
+                                            // LÓGICA DE RESUMEN TOTALES
+                                            if(!tempStats[mId]) tempStats[mId] = { nombre: medicos.find(m=>String(m.id)===mId)?.nombre, propias: 0, extras: 0, arreglos: 0 }; 
+                                            
+                                            if(slot.s.tipoPago === 'PERSONAL') {
+                                                tempStats[mId].arreglos++;
+                                            } else if(titularId && titularId === mId) { 
+                                                tempStats[mId].propias++;
+                                            } else { 
+                                                tempStats[mId].extras++; 
+                                            }
+                                        } 
+                                    } 
+                                }); 
+                            } 
+                            cursor.setDate(cursor.getDate() + 1); 
+                        } 
+                        // CORRECCIÓN: Si el modo es totales, asignamos el objeto de estadísticas convertido a array a los resultados.
+                        if(mode === 'totales') setResultados(Object.values(tempStats)); else setResultados(results); 
+                    } 
+                }
+                setTituloReporte(titulo);
+                // Si mode no es totales, results ya está cargado arriba. Si es totales, se cargó dentro del bloque.
+                if (mode !== 'totales') setResultados(results);
+            };
+            
+            const copiarResultados = () => { if (!resultados) return; let texto = ""; 
+            
+                if(mode === 'guardias') { texto = "Fecha\tTurno\tTipo\n"; resultados.forEach(r => texto += `${r.fecha}\t${r.turno}\t${r.tipo}\n`); } 
+                else if(mode === 'totales') { texto = "Médico\tPropias\tExtras\tArreglos\n"; resultados.forEach(r => texto += `${r.nombre}\t${r.propias}\t${r.extras}\t${r.arreglos}\n`); } 
+                else if (mode === 'derivadas') { texto = "Fecha\tTurno\tQuien Hizo\tRecibo de Cobro\n"; resultados.forEach(r => texto += `${r.fecha}\t${r.turno}\t${r.hizo}\t${r.recibo}\n`); } 
+                else if(mode === 'licencias') { texto = "Médico\tMotivo\tDesde\tHasta\n"; resultados.forEach(r => texto += `${r.medicoNombre}\t${r.motivo}\t${formatDateISO(r.desde)}\t${formatDateISO(r.hasta)}\n`); }
+                
+                navigator.clipboard.writeText(texto).then(() => alert("Copiado")); 
+            };
+
+            // --- LOGICA REPORTE MASIVO (SIN CAMBIOS) ---
+            const toggleMedicoSeleccion = (id) => {
+                if (medicosSeleccionados.includes(id)) setMedicosSeleccionados(medicosSeleccionados.filter(x => x !== id));
+                else setMedicosSeleccionados([...medicosSeleccionados, id]);
+            };
+            const toggleTodosMedicos = () => {
+                if (medicosSeleccionados.length === medicos.length) setMedicosSeleccionados([]);
+                else setMedicosSeleccionados(medicos.map(m => m.id));
+            };
+            
+            const generarReportesMasivos = async () => {
+                if (medicosSeleccionados.length === 0) return alert("Seleccione al menos un médico.");
+                setGenerando(true);
+                setResultadosMasivos([]);
+                const [yearStr, monthStr] = reporteMes.split('-');
+                const year = parseInt(yearStr); const month = parseInt(monthStr) - 1; // JS month 0-11
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const monthName = new Date(year, month, 1).toLocaleString('es-ES', { month: 'long' });
+
+                const generatedFiles = [];
+
+                // Función auxiliar para esperar renderizado
+                const wait = (ms) => new Promise(res => setTimeout(res, ms));
+
+                for (let medId of medicosSeleccionados) {
+                    const medico = medicos.find(m => String(m.id) === String(medId));
+                    if (!medico) continue;
+
+                    // 1. Calcular Datos del Médico
+                    let totalUnits = 0;
+                    const shifts = [];
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        const fObj = new Date(year, month, d);
+                        const dayOfWeek = fObj.getDay(); 
+                        const fStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                        const g = guardias[fStr];
+                        const p = plantilla[dayOfWeek];
+
+                        if (g) {
+                            const slots = [
+                                { s: g.dia1, t: p?.dia1, n: 'Día 1' }, 
+                                { s: g.dia2, t: p?.dia2, n: 'Día 2' },
+                                { s: g.noche1, t: p?.noche1, n: 'Noche 1' }, 
+                                { s: g.noche2, t: p?.noche2, n: 'Noche 2' }
+                            ];
+                            
+                            slots.forEach(slot => {
+                                // 1. Debe estar cubierta y NO ser Personal (Arreglo)
+                                if (!slot.s || slot.s.estado !== 'CUBIERTA') return;
+                                if (slot.s.tipoPago === 'PERSONAL') return; // EXCLUIR ARREGLOS PERSONALES DEL REPORTE MASIVO
+
+                                // 2. Determinar Receptor (Quién cobra)
+                                const receptorId = slot.s.prestadorId ? String(slot.s.prestadorId) : (slot.s.medicoId ? String(slot.s.medicoId) : null);
+                                
+                                if (receptorId === String(medId)) {
+                                    // 3. Determinar si es "Propia" (Titular = Receptor) para excluirla
+                                    const titularId = slot.t?.medicoId ? String(slot.t.medicoId) : null;
+                                    const esPropia = titularId && titularId === receptorId;
+
+                                    if (esPropia) return; // EXCLUIR PROPIAS (Se cobran por sueldo básico)
+
+                                    // Si pasa los filtros, suma
+                                    totalUnits += 1; // 12hs = 1 unidad
+                                    shifts.push({
+                                        fecha: formatDate(d, month, year),
+                                        turno: slot.n,
+                                        tipo: !titularId ? 'Cobertura Vacante' : 'Cobertura Licencia'
+                                    });
+                                }
+                            });
+                        }
+                    }
+
+                    // 2. Renderizar contenido en el contenedor oculto
+                    if (previewContainerRef.current) {
+                         const container = previewContainerRef.current;
+                         // Limpiar
+                         container.innerHTML = '';
+                         
+                         // Construir HTML string simple
+                         const exceeded = totalUnits > 10;
+                         const title = `# ${medico.nombre} - Mes de ${monthName} #`;
+                         const filename = `${medico.nombre.split(',')[0].trim()} - ${monthName}.pdf`;
+
+                         const htmlContent = `
+                            <div style="font-family: sans-serif; padding: 40px; color: #000;">
+                                <h1 style="text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">${title}</h1>
+                                <p style="margin-bottom: 20px;"><strong>Fecha de emisión:</strong> ${new Date().toLocaleDateString()}</p>
+                                
+                                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+                                    <thead>
+                                        <tr style="background-color: #f3f4f6;">
+                                            <th style="border: 1px solid #9ca3af; padding: 8px; text-align: left;">Fecha</th>
+                                            <th style="border: 1px solid #9ca3af; padding: 8px; text-align: left;">Turno</th>
+                                            <th style="border: 1px solid #9ca3af; padding: 8px; text-align: left;">Tipo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${shifts.length === 0 ? '<tr><td colspan="3" style="border: 1px solid #9ca3af; padding: 8px; text-align: center;">Sin guardias extras registradas este mes.</td></tr>' : 
+                                          shifts.map(s => `<tr><td style="border: 1px solid #9ca3af; padding: 8px;">${s.fecha}</td><td style="border: 1px solid #9ca3af; padding: 8px;">${s.turno}</td><td style="border: 1px solid #9ca3af; padding: 8px;">${s.tipo}</td></tr>`).join('')}
+                                    </tbody>
+                                </table>
+
+                                <div style="margin-top: 30px; padding: 15px; border: 1px solid #ccc; background-color: #f9fafb;">
+                                    <p style="font-size: 16px;"><strong>Total Unidades (12hs):</strong> ${totalUnits}</p>
+                                    ${exceeded ? `<p style="color: #dc2626; font-weight: bold; margin-top: 10px;">⚠️ EXCEDE EL TOPE PERMITIDO (Máx 10)</p>` : `<p style="color: #16a34a; font-weight: bold; margin-top: 10px;">✓ DENTRO DEL TOPE PERMITIDO</p>`}
+                                </div>
+                            </div>
+                         `;
+                         container.innerHTML = htmlContent;
+
+                         // Esperar render
+                         await wait(100);
+
+                         // Capturar
+                         try {
+                            const canvas = await window.html2canvas(container, { scale: 1.0, useCORS: true, backgroundColor: '#ffffff', logging: false });
+                            const imgData = canvas.toDataURL('image/jpeg', 0.8);
+                            const pdf = new jsPDF('p', 'mm', 'a4');
+                            const imgWidth = 210; 
+                            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+                            
+                            const blob = pdf.output('blob');
+                            generatedFiles.push({
+                                id: medico.id,
+                                nombre: medico.nombre,
+                                filename: filename,
+                                exceeded: exceeded,
+                                blob: blob,
+                                total: totalUnits
+                            });
+
+                         } catch (err) {
+                             console.error("Error generando PDF para", medico.nombre, err);
+                         }
+                    }
+                }
+                setResultadosMasivos(generatedFiles);
+                setGenerando(false);
+            };
+
+            const descargarBlob = (blob, filename) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            };
+
+            const compartirBlob = (blob, filename) => {
+                const file = new File([blob], filename, { type: 'application/pdf' });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    navigator.share({ files: [file], title: filename, text: filename }).catch(e => console.log(e));
+                } else {
+                    descargarBlob(blob, filename);
+                    window.open("https://web.whatsapp.com", "_blank");
+                    alert("Se descargó el archivo. Arrástralo a WhatsApp Web.");
+                }
+            };
+
+            return ( <div className="space-y-6">
+                <Card>
+                    <h3 className="text-lg font-bold mb-4 flex gap-2"><Search/> Panel de Consultas y Reportes</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                        <button onClick={() => {setMode('guardias'); setResultados(null)}} className={`p-2 rounded border ${mode==='guardias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Guardias por Médico</button>
+                        <button onClick={() => {setMode('licencias'); setResultados(null)}} className={`p-2 rounded border ${mode==='licencias'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Licencias por Fecha</button>
+                        <button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button>
+                        <button onClick={() => {setMode('derivadas'); setResultados(null)}} className={`p-2 rounded border ${mode==='derivadas'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Derivadas (No Cobradas)</button>
+                        <button onClick={() => {setMode('masivo'); setResultados(null)}} className={`p-2 rounded border font-bold text-indigo-700 ${mode==='masivo'?'bg-indigo-100 border-indigo-500':'bg-gray-50'}`}>📄 Reportes Masivos</button>
+                    </div>
+
+                    {/* CAMPOS DE FILTRO */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-gray-50 p-4 rounded">
+                        {(mode !== 'derivadas' && mode !== 'masivo') && (
+                            <>
+                                <div><label className="text-xs font-bold text-gray-500">Desde</label><input type="date" className="w-full p-2 border rounded" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}/></div>
+                                <div><label className="text-xs font-bold text-gray-500">Hasta</label><input type="date" className="w-full p-2 border rounded" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}/></div>
+                            </>
+                        )}
+                        {mode === 'derivadas' && (
+                            <div className="md:col-span-2">
+                                <label className="text-xs font-bold text-gray-500">Mes de Búsqueda</label>
+                                <input type="month" className="w-full p-2 border rounded" value={mesBusqueda} onChange={e=>setMesBusqueda(e.target.value)}/>
+                            </div>
+                        )}
+                        {mode === 'guardias' && (
+                            <div>
+                                <label className="text-xs font-bold text-gray-500">Médico</label>
+                                <select className="w-full p-2 border rounded" value={medicoId} onChange={e=>setMedicoId(e.target.value)}><option value="">Seleccione...</option>{medicosOrdenados.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}</select>
+                            </div>
+                        )}
+                        <Button onClick={buscar}>Buscar</Button>
+                    </div>
+
+                    {/* MODO MASIVO */}
+                    {mode === 'masivo' && (
+                        <div className="bg-indigo-50 p-4 rounded border border-indigo-200">
+                            <h4 className="font-bold text-lg mb-4 text-indigo-800 flex items-center gap-2"><FileText/> Generación Masiva de Reportes Mensuales</h4>
+                            
+                            <div className="mb-4">
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Seleccionar Mes</label>
+                                <input type="month" className="p-2 border rounded" value={reporteMes} onChange={e => setReporteMes(e.target.value)} />
+                            </div>
+
+                            <div className="mb-4">
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="block text-sm font-bold text-gray-700">Seleccionar Médicos ({medicosSeleccionados.length})</label>
+                                    <button onClick={toggleTodosMedicos} className="text-sm text-blue-600 underline">
+                                        {medicosSeleccionados.length === medicos.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                                    </button>
+                                </div>
+                                <div className="bg-white border rounded h-48 overflow-y-auto p-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                                    {medicosOrdenados.map(m => (
+                                        <label key={m.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                            <input type="checkbox" checked={medicosSeleccionados.includes(m.id)} onChange={() => toggleMedicoSeleccion(m.id)} />
+                                            {m.nombre}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <Button onClick={generarReportesMasivos} disabled={generando} className="w-full md:w-auto" variant="primary">
+                                {generando ? 'Generando PDFs (Espere...)' : 'Generar Reportes PDF'}
+                            </Button>
+
+                            {/* CONTENEDOR OCULTO PARA GENERACION */}
+                            <div ref={previewContainerRef} className="off-screen-render bg-white"></div>
+
+                            {/* RESULTADOS */}
+                            {resultadosMasivos.length > 0 && (
+                                <div className="mt-6 border-t pt-4">
+                                    <h5 className="font-bold mb-3">Reportes Generados:</h5>
+                                    <div className="space-y-2">
+                                        {resultadosMasivos.map((res, i) => (
+                                            <div key={i} className="bg-white p-3 rounded shadow-sm border flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-bold flex items-center gap-2">
+                                                        {res.nombre}
+                                                        {res.exceeded && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold border border-red-200 flex items-center gap-1"><AlertOctagon size={12}/> Excede ({res.total})</span>}
+                                                        {!res.exceeded && <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold border border-green-200">OK ({res.total})</span>}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500">{res.filename}</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button variant="secondary" onClick={() => descargarBlob(res.blob, res.filename)} title="Descargar"><Download size={16}/></Button>
+                                                    <Button variant="whatsapp" onClick={() => compartirBlob(res.blob, res.filename)} title="Compartir"><ShareIcon size={16}/></Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                        </div>
+                    )}
+                </Card>
+
+                {editingLicenciaId && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Editar Licencia</h3><div className="space-y-3"><div><label className="block text-sm font-medium">Médico</label><select className="w-full p-2 border rounded" value={editLicenciaForm.medicoId} onChange={e => setEditLicenciaForm({...editLicenciaForm, medicoId: e.target.value})}>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div><div><label className="block text-sm font-medium">Motivo</label><select className="w-full p-2 border rounded" value={editLicenciaForm.motivo} onChange={e => setEditLicenciaForm({...editLicenciaForm, motivo: e.target.value})}><option value="Vacaciones">Vacaciones</option><option value="Enfermedad">Enfermedad</option><option value="Licencia por Stress">Licencia por Stress</option><option value="Otro">Otro</option></select></div><div><label className="block text-sm font-medium">Desde</label><input type="date" className="w-full p-2 border rounded" value={editLicenciaForm.desde} onChange={e => setEditLicenciaForm({...editLicenciaForm, desde: e.target.value})} /></div><div><label className="block text-sm font-medium">Hasta</label><input type="date" className="w-full p-2 border rounded" value={editLicenciaForm.hasta} onChange={e => setEditLicenciaForm({...editLicenciaForm, hasta: e.target.value})} /></div><div><label className="block text-sm font-medium">Detalle Cobertura</label><input className="w-full p-2 border rounded" value={editLicenciaForm.detalleCobertura || ''} onChange={e => setEditLicenciaForm({...editLicenciaForm, detalleCobertura: e.target.value})} /></div></div><div className="flex gap-2 justify-end mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingLicenciaId(null)}>Cancelar</Button><Button onClick={saveEditLicencia}>Guardar Cambios</Button></div></div></div>)}
+                {resultados && <Card id="resultados-busqueda">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h4 className="font-bold">Resultados ({resultados.length}):</h4>
+                            <p className="text-sm text-gray-500 print-title font-semibold">{tituloReporte}</p>
+                        </div>
+                        <div className="flex gap-2 no-print"><Button variant="secondary" onClick={copiarResultados} title="Copiar"><Clipboard/></Button><Button variant="primary" onClick={() => handleExportAction('resultados-busqueda', 'Resultados', 'share')} disabled={loadingPdf}>{loadingPdf ? '...' : 'Compartir PDF'}</Button><Button variant="primary" onClick={() => handleExportAction('resultados-busqueda', 'Resultados', 'download')} disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button></div>
+                    </div>
+                    <div className="w-scroll-container">
+                        <table className="w-full text-sm border-collapse border">
+                            <thead className="bg-white">
+                                {mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}
+                                {mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th><th className="border p-2">Acciones</th></tr>}
+                                {mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}
+                                {mode === 'derivadas' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Quien Hizo</th><th className="border p-2">Recibo de Cobro</th><th className="border p-2">Tipo Derivación</th></tr>}
+                            </thead>
+                            <tbody>{resultados.map((r, i) => (
+                                <tr key={i} className="bg-white">
+                                    {mode === 'guardias' && (
+                                        <>
+                                            <td className="border p-2">{r.fecha}</td>
+                                            <td className="border p-2">{r.turno}</td>
+                                            <td className="border p-2">
+                                                {(r.tipo.includes('Propia') || r.tipo.includes('Arreglo')) ? 
+                                                    <span className="text-gray-500 italic">{r.tipo}</span> : 
+                                                    <span className="font-bold text-blue-600">{r.tipo}</span>
+                                                }
+                                            </td>
+                                        </>
+                                    )}
+                                    {mode === 'licencias' && (
+                                        <>
+                                            <td className="border p-2 font-bold">{r.medicoNombre}</td>
+                                            <td className="border p-2">{r.motivo}</td>
+                                            <td className="border p-2">{formatDateISO(r.desde)}</td>
+                                            <td className="border p-2">{formatDateISO(r.hasta)}</td>
+                                            <td className="border p-2">
+                                                <button onClick={() => startEditLicencia(r)} className="text-blue-600"><Edit size={16}/></button>
+                                            </td>
+                                        </>
+                                    )}
+                                    {mode === 'totales' && (
+                                        <>
+                                            <td className="border p-2 font-medium">{r.nombre}</td>
+                                            <td className="border p-2 text-center">{r.propias}</td>
+                                            <td className="border p-2 text-center font-bold text-blue-600">{r.extras}</td>
+                                            <td className="border p-2 text-center text-gray-500">{r.arreglos}</td>
+                                        </>
+                                    )}
+                                    {mode === 'derivadas' && (
+                                        <>
+                                            <td className="border p-2">{r.fecha}</td>
+                                            <td className="border p-2">{r.turno}</td>
+                                            <td className="border p-2 font-medium">{r.hizo}</td>
+                                            <td className="border p-2 font-bold text-red-600">{r.recibo}</td>
+                                            <td className="border p-2 text-xs">{r.tipo}</td>
+                                        </>
+                                    )}
+                                </tr>
+                            ))}</tbody>
+                        </table>
+                    </div>
+                </Card>}
+            </div> );
+        }
+
+        function VistaPlantilla() { 
+            const [editingDay, setEditingDay] = useState(null); const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const mapVisualToReal = (idx) => (idx + 1) % 7; const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+            const EditTemplateModal = () => {
+                if (editingDay === null) return null;
+                const realDayIdx = mapVisualToReal(editingDay);
+                const dayData = plantilla[realDayIdx] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
+                const [form, setForm] = useState(dayData);
+                const guardar = () => { dbGuardarPlantilla(realDayIdx, form); setEditingDay(null); };
+                const TemplateSlot = ({ label, slotData, onChange }) => (
+                    <div className="bg-gray-50 p-2 rounded border mb-2"><div className="font-bold text-xs text-gray-600 mb-1">{label}</div><select className="w-full p-1 border rounded text-sm mb-1" value={slotData.medicoId || ''} onChange={e => onChange({...slotData, estado: e.target.value ? 'CUBIERTA' : 'VACANTE', medicoId: e.target.value})}><option value="">-- Vacante --</option>{medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
+                );
+                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Configurar Base: {diasSemana[editingDay]}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-600 mb-2">Turno Día</h4><TemplateSlot label="Médico 1" slotData={form.dia1} onChange={d => setForm({...form, dia1: d})} /><TemplateSlot label="Médico 2" slotData={form.dia2} onChange={d => setForm({...form, dia2: d})} /></div><div><h4 className="font-bold text-indigo-600 mb-2">Turno Noche</h4><TemplateSlot label="Médico 1" slotData={form.noche1} onChange={d => setForm({...form, noche1: d})} /><TemplateSlot label="Médico 2" slotData={form.noche2} onChange={d => setForm({...form, noche2: d})} /></div></div><div className="flex justify-end gap-2 mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingDay(null)}>Cancelar</Button><Button onClick={guardar}>Guardar</Button></div></div></div>);
+            };
+            return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><div className="flex gap-2"><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'download')} variant="primary" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : 'Descargar PDF'}</Button></div></div><div className="grid-responsive-fill">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
+        }
+
+        function VistaReporte() { 
+            const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
+            const vacantesPorDia = {}; const licenciasPorMedico = {}; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
+            for (let d = 1; d <= 31; d++) {
+                const fechaObj = new Date(year, month, d); if (fechaObj.getMonth() !== month) break;
+                const fechaStr = fechaObj.toISOString().split('T')[0]; const diaSemanaIndex = fechaObj.getDay(); const nombreDia = diasSemanaNombres[diaSemanaIndex];
+                const g = guardias[fechaStr]; const p = plantilla[diaSemanaIndex]; 
+                if (!g) continue;
+                const analizarSlot = (actualSlot, templateSlot) => {
+                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
+                    const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
+                    const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : null;
+                    const receptor = prestador ? prestador : medicoActual; 
+                    if (!receptor || !medicoActual) return;
+                    const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
+                    let medicoOriginal = null;
+                    if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
+                    const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
+                    if (esVacanteOriginal) { if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; vacantesPorDia[nombreDia].push(item); } 
+                    else if (medicoOriginal) { const nombreTitular = medicoOriginal.nombre; const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr); const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia'; const tituloGrupo = `${nombreTitular} (${motivoLic})`; if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; licenciasPorMedico[tituloGrupo].push(item); }
+                };
+                analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
+            }
+            const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
+            const conteoFacturacion = {}; 
+            const sumarAlTopeRaw = (lista) => { lista.forEach(item => { conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1; }); };
+            const vacantesRaw = []; const licenciasRaw = []; Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista)); Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista)); sumarAlTopeRaw(vacantesRaw); sumarAlTopeRaw(licenciasRaw);
+            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
+            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
+            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return { nombre: med ? med.nombre : '?', total: cant, id }; }).sort((a,b) => b.total - a.total);
+            
+            // REPORTE FILA 
+            const FilaReporte = ({ item }) => ( 
+                <tr className="border-b text-xs">
+                    <td className="border p-1 text-center w-[12%]">{item.fecha}</td>
+                    <td className="border p-1 text-center bg-gray-50 w-[7%]">{!item.sadofe && !item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-gray-50 w-[7%]">{!item.sadofe && item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-blue-50 w-[7%]">{item.sadofe && !item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 text-center bg-blue-50 w-[7%]">{item.sadofe && item.es24 ? 'X' : ''}</td>
+                    <td className="border p-1 font-bold text-blue-700 text-center w-[60%]">{item.receptor}</td>
+                </tr> 
+            );
+            
+            // REPORTE TABLA
+            const TablaGrupo = ({ items }) => ( 
+                <div className="w-full overflow-x-auto">
+                    <table className="min-w-[700px] w-full text-sm border-collapse border border-gray-400 mb-4 bg-white">
+                        <thead className="bg-gray-200">
+                            <tr className="text-xs uppercase">
+                                <th className="border p-1 w-[12%]">Fecha</th>
+                                <th className="border p-1 w-[7%]">12 hs<br/>Sem</th>
+                                <th className="border p-1 w-[7%]">24 hs<br/>Sem</th>
+                                <th className="border p-1 w-[7%] bg-blue-50">12 hs<br/>SADOFE</th>
+                                <th className="border p-1 w-[7%] bg-blue-50">24 hs<br/>SADOFE</th>
+                                <th className="border p-1 text-center w-[60%]">Recibo/Cobra</th>
+                            </tr>
+                        </thead>
+                        <tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody>
+                    </table> 
+                </div>
+            );
+
+            return ( 
+            <div id="reporte-ministerio" className="space-y-8 bg-white p-4 min-h-screen">
+                {/* Contenedor que permite el scroll horizontal en pantallas pequeñas */}
+                <div className="w-scroll-container">
+                    {/* Contenido que debe ocupar todo el ancho */}
+                    <div className="min-w-[1000px] w-full">
+                        <div className="flex justify-between items-center mb-8 no-print">
+                            <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2>
+                            <div className="flex gap-2">
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
+                            </div>
+                        </div>
+                        
+                        {/* CONTROL DE TOPES */}
+                        <div className="mb-8 p-4 bg-gray-50 border rounded no-print">
+                            <h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3>
+                            <table className="w-full text-sm border-collapse bg-white">
+                                <thead className="bg-gray-200">
+                                    <tr>
+                                        <th className="border p-2 text-left">Médico</th>
+                                        <th className="border p-2 text-center">Total Unidades (12hs=1 / 24hs=2)</th>
+                                        <th className="border p-2 text-center">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {totalesArray.map(t => (
+                                        <tr key={t.id} className={t.total > 10 ? "bg-red-100 font-bold text-red-700" : ""}>
+                                            <td className="border p-2">{t.nombre}</td>
+                                            <td className="border p-2 text-center">{t.total}</td>
+                                            <td className="border p-2 text-center">{t.total > 10 ? "EXCEDIDO" : "OK"}</td>
+                                        </tr>
+                                    ))}
+                                    {totalesArray.length === 0 && <tr><td colSpan="3" className="p-2 text-center italic">Sin datos.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div>
+                        
+                        {/* COBERTURA DE CARGOS VACANTES (Misma apariencia que Control de Topes) */}
+                        <div className="avoid-break mb-8 p-4 bg-gray-50 border rounded">
+                            <h3 className="font-bold text-lg mb-2">COBERTURA DE CARGOS VACANTES</h3>
+                            {Object.keys(vacantesFinales).length === 0 ? 
+                                <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes.</p> : 
+                                Object.entries(vacantesFinales).map(([dia, items]) => (
+                                    <div key={dia} className="mb-6 avoid-break">
+                                        <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4>
+                                        <TablaGrupo items={items} />
+                                    </div>
+                                ))}
+                        </div>
+                        
+                        {/* COBERTURA DE LICENCIAS (Misma apariencia que Control de Topes) */}
+                        <div className="mt-8 avoid-break p-4 bg-gray-50 border rounded">
+                            <h3 className="font-bold text-lg mb-2">COBERTURA DE LICENCIAS</h3>
+                            {Object.keys(licenciasFinales).length === 0 ? 
+                                <p className="italic text-gray-500 mb-4">No hay coberturas de licencias.</p> : 
+                                Object.entries(licenciasFinales).map(([medico, items]) => (
+                                    <div key={medico} className="mb-6 avoid-break">
+                                        <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {medico}</h4>
+                                        <TablaGrupo items={items} />
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                </div>
+            </div> );
+        }
+
+        function VistaConfiguracion() {
+            return (
+                <div className="space-y-6">
+                    <h3 className="text-xl font-bold text-gray-800 border-b pb-2 mb-4">Gestión de Médicos</h3>
+                    <VistaMedicos />
+                </div>
+            );
+        }
+
+        // --- RENDER VIEW ---
+        function renderView() {
+            switch(view) {
+                case 'calendario': return <VistaCalendario />;
+                case 'medicos': return <VistaMedicos />;
+                case 'licencias': return <VistaLicencias />;
+                case 'plantilla': return <VistaPlantilla />;
+                case 'reporte': return <VistaReporte />; // Reusar componente anterior
+                case 'busqueda': return <VistaBusqueda />;
+                case 'config': return <VistaConfiguracion />;
+                default: return <VistaCalendario />;
+            }
+        }
+
+        return (
+            <div className="min-h-screen pb-10 font-sans text-gray-900 bg-gray-50">
+                <nav className="bg-white shadow mb-6 w-scroll-container">
+                    <div className="w-full px-4">
+                        <div className="flex justify-between h-16 min-w-[600px]">
+                            <div className="flex items-center"><span className="font-bold text-xl text-blue-600 flex items-center gap-2"><Umbrella /> Gestión de Guardias </span></div>
+                            <div className="flex space-x-2 items-center">
+                                <button onClick={() => setView('calendario')} className={`px-3 py-1 rounded ${view === 'calendario' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Calendario</button>
+                                <button onClick={() => setView('licencias')} className={`px-3 py-1 rounded ${view === 'licencias' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Licencias</button>
+                                <button onClick={() => setView('plantilla')} className={`px-3 py-1 rounded ${view === 'plantilla' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Plantilla</button>
+                                <button onClick={() => setView('reporte')} className={`px-3 py-1 rounded ${view === 'reporte' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Reporte</button>
+                                <button onClick={() => setView('busqueda')} className={`px-3 py-1 rounded ${view === 'busqueda' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>Búsqueda</button>
+                                <button onClick={() => setView('config')} className={`px-3 py-1 rounded ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`} title="Configuración"><Settings /></button>
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {!user ? <div className="text-center p-10">Conectando con base de datos segura...</div> : renderView()}
+                </main>
+            </div>
+        );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
