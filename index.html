@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gestor de Guardias Pediátricas</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230f766e'/%3E%3Crect x='42' y='18' width='16' height='64' fill='white'/%3E%3Crect x='18' y='42' width='64' height='16' fill='white'/%3E%3C/svg%3E">
     
     <!-- 1. React y ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -512,7 +513,7 @@
 
         function VistaMedicos() {
              const [nuevo, setNuevo] = useState({ nombre: '', tipo: 'Titular', tieneRecibo: true }); const [editingId, setEditingId] = useState(null); const [editForm, setEditForm] = useState({});
-             const [filtroNombre, setFiltroNombre] = useState(''); const [listaMedicosVisible, setListaMedicosVisible] = useState(null); 
+             const [filtroNombre, setFiltroNombre] = useState(''); const [listaMedicosVisible, setListaMedicosVisible] = useState([]); 
              const agregar = () => { if (!nuevo.nombre) return; dbAgregarMedico({ ...nuevo, id: Date.now().toString() }); setNuevo({ nombre: '', tipo: 'Titular', tieneRecibo: true }); };
              const borrar = (id) => { if(window.confirm('¿Borrar?')) dbBorrarMedico(id); };
              const startEdit = (medico) => { setEditingId(medico.id); setEditForm(medico); }; 
@@ -521,6 +522,11 @@
                  if (filtroNombre.trim() === '') { setListaMedicosVisible(medicosOrdenados); } 
                  else { const filtrados = medicosOrdenados.filter(m => m.nombre.toLowerCase().includes(filtroNombre.toLowerCase())); setListaMedicosVisible(filtrados); }
              };
+
+             useEffect(() => {
+                 setListaMedicosVisible(medicosOrdenados);
+             }, [medicosOrdenados]);
+
 
             return ( 
                 <div className="space-y-6">
@@ -535,7 +541,34 @@
                     </Card>
                     <Card>
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={18}/> Buscar Médicos para Editar</h3>
-                        {listaMedicosVisible && (
+
+                        <div className="mb-4">
+                            <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-end">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Buscar médico</label>
+                                    <input
+                                        type="text"
+                                        value={filtroNombre}
+                                        onChange={(e) => { setFiltroNombre(e.target.value); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') buscarMedicos(); }}
+                                        placeholder="Buscar por nombre..."
+                                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                                    />
+                                </div>
+                                <Button onClick={buscarMedicos} className="md:w-auto w-full flex items-center justify-center gap-2">
+                                    <Search size={18}/> Buscar
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => { setFiltroNombre(''); setListaMedicosVisible(medicosOrdenados); }}
+                                    className="md:w-auto w-full"
+                                >
+                                    Limpiar
+                                </Button>
+                            </div>
+                        </div>
+
+                        {(listaMedicosVisible && listaMedicosVisible.length >= 0) && (
                             <div className="w-scroll-container"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Nombre</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Rol</th><th className="px-6 py-3 text-left text-xs uppercase text-gray-500">Recibo</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{listaMedicosVisible.map(m => (<tr key={m.id}>{editingId === m.id ? (<><td className="px-6 py-4"><input className="border p-1 w-full" value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></td><td className="px-6 py-4"><select className="border p-1 w-full" value={editForm.tipo} onChange={e => setEditForm({...editForm, tipo: e.target.value})}><option value="Titular">Titular</option><option value="Residente">Residente</option><option value="Externo">Externo</option></select></td><td className="px-6 py-4"><input type="checkbox" checked={editForm.tieneRecibo} onChange={e => setEditForm({...editForm, tieneRecibo: e.target.checked})} /></td><td className="px-6 py-4 text-right"><button onClick={saveEdit} className="text-green-600 mr-2"><CheckCircle/></button><button onClick={() => setEditingId(null)} className="text-red-600"><XCircle/></button></td></>) : (<><td className="px-6 py-4 font-medium">{m.nombre}</td><td className="px-6 py-4 text-gray-500">{m.tipo}</td><td className="px-6 py-4">{m.tieneRecibo ? 'Sí' : 'No'}</td><td className="px-6 py-4 text-right flex justify-end gap-3"><button onClick={() => startEdit(m)} className="text-blue-600"><Edit size={18}/></button><button onClick={() => dbBorrarMedico(m.id)} className="text-red-600"><Trash2 size={18}/></button></td></>)}</tr>))}</tbody></table></div>
                         )}
                         {!listaMedicosVisible && <p className="text-gray-400 italic text-center p-4">Realice una búsqueda para ver el listado.</p>}
