@@ -1332,13 +1332,20 @@
         function VistaReporte() { 
             const { month, year } = getDaysInMonth(currentDate); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
+            
             const vacantesPorDia = {}; 
             const licenciasPorMedico = {}; 
-            const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; 
-            const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const conteoFacturacion = {}; // Para el control de topes
             
-            const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
+            const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+            
+            const esSadofe = (fechaObj) => { 
+                const day = fechaObj.getDay(); 
+                return day === 0 || day === 6; 
+            };
 
+            // Recorremos todos los días del mes
             for (let d = 1; d <= 31; d++) {
                 const fechaObj = new Date(year, month, d); 
                 if (fechaObj.getMonth() !== month) break;
@@ -1352,183 +1359,174 @@
                 
                 if (!g) continue;
 
-                const analizarSlot = (actualSlot, templateSlot) => {
-                    // Solo procesamos si la guardia está efectivamente cubierta y no es arreglo personal
-                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
-                    
-                    const medicoActualId = String(actualSlot.medicoId);
-                    const receptorId = actualSlot.prestadorId ? String(actualSlot.prestadorId) : medicoActualId;
-                    
-                    const medicoActual = medicos.find(m => String(m.id) === medicoActualId);
-                    const receptor = medicos.find(m => String(m.id) === receptorId);
-                    
-                    if (!medicoActual || !receptor) return;
+                // Analizamos cada uno de los 4 slots del día
+                const slotsKeys = ['dia1', 'dia2', 'noche1', 'noche2'];
+                
+                slotsKeys.forEach(key => {
+                    const actualSlot = g[key];
+                    const templateSlot = p ? p[key] : null;
 
-                    const titularId = templateSlot?.medicoId ? String(templateSlot.medicoId) : null;
-                    const esVacanteOriginal = !titularId;
-                    
-                    // Verificar si el titular de la plantilla tiene licencia este día
-                    const detalleLic = titularId ? licencias.find(lic => 
-                        String(lic.medicoId) === titularId && 
-                        fechaStr >= lic.desde && fechaStr <= lic.hasta
-                    ) : null;
-
-                    const item = { 
-                        fecha: formatDate(d, month, year), 
-                        medico: medicoActual.nombre, 
-                        receptor: receptor.nombre, 
-                        sadofe: esSadofe(fechaObj), 
-                        medicoId: medicoActualId, 
-                        receptorId: receptorId, 
-                        diaRaw: d 
-                    };
-
-                    if (esVacanteOriginal) {
-                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
-                        vacantesPorDia[nombreDia].push(item);
-                    } else if (detalleLic && titularId !== medicoActualId) {
-                        // Es una cobertura de licencia (El médico que hace la guardia es distinto al titular con licencia)
-                        const titularNombre = medicos.find(m => String(m.id) === titularId)?.nombre || 'Titular';
-                        const tituloGrupo = `${titularNombre} (${detalleLic.motivo})`;
+                    // Solo procesamos si la guardia está cubierta por sistema (no personal)
+                    if (actualSlot && actualSlot.estado === 'CUBIERTA' && actualSlot.medicoId && actualSlot.tipoPago === 'SISTEMA') {
                         
-                        if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = [];
-                        licenciasPorMedico[tituloGrupo].push(item);
-                    }
-                };
+                        const medicoHizoId = String(actualSlot.medicoId);
+                        const receptorId = actualSlot.prestadorId ? String(actualSlot.prestadorId) : medicoHizoId;
+                        
+                        const titularId = templateSlot?.medicoId ? String(templateSlot.medicoId) : null;
+                        
+                        // Buscamos si el titular tiene licencia este día
+                        const licenciaDelTitular = titularId ? licencias.find(lic => 
+                            String(lic.medicoId) === titularId && 
+                            fechaStr >= lic.desde && fechaStr <= lic.hasta
+                        ) : null;
 
-                analizarSlot(g.dia1, p?.dia1); 
-                analizarSlot(g.dia2, p?.dia2); 
-                analizarSlot(g.noche1, p?.noche1); 
-                analizarSlot(g.noche2, p?.noche2);
-            }
+                        const medicoHizo = medicos.find(m => String(m.id) === medicoHizoId);
+                        const receptor = medicos.find(m => String(m.id) === receptorId);
+                        
+                        if (!medicoHizo || !receptor) return;
 
-            // Esta función ahora detecta correctamente si un médico receptor hizo 12 o 24 hs en el mismo grupo/día
-            const procesarGrupo = (lista) => {
-                const mapa = new Map();
-                lista.forEach(item => {
-                    const key = `${item.fecha}-${item.receptorId}`;
-                    if (mapa.has(key)) {
-                        mapa.get(key).es24 = true;
-                    } else {
-                        mapa.set(key, { ...item, es24: false });
+                        const item = {
+                            fecha: formatDate(d, month, year),
+                            receptor: receptor.nombre,
+                            receptorId: receptorId,
+                            sadofe: esSadofe(fechaObj),
+                            diaRaw: d
+                        };
+
+                        // CASO 1: Cobertura de Vacante (No hay titular en plantilla)
+                        if (!titularId) {
+                            if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
+                            vacantesPorDia[nombreDia].push(item);
+                        } 
+                        // CASO 2: Cobertura de Licencia (Titular en licencia y lo cubre otro médico)
+                        else if (licenciaDelTitular && titularId !== medicoHizoId) {
+                            const titularNombre = medicos.find(m => String(m.id) === titularId)?.nombre || 'Titular';
+                            const grupoKey = `${titularNombre} (${licenciaDelTitular.motivo})`;
+                            
+                            if (!licenciasPorMedico[grupoKey]) licenciasPorMedico[grupoKey] = [];
+                            licenciasPorMedico[grupoKey].push(item);
+                        }
                     }
                 });
-                return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw);
+            }
+
+            // Función para agrupar 12hs en 24hs si es el mismo receptor el mismo día
+            const consolidarTurnos = (lista) => {
+                const consolidado = new Map();
+                lista.forEach(item => {
+                    const idUnico = `${item.fecha}-${item.receptorId}`;
+                    if (consolidado.has(idUnico)) {
+                        consolidado.get(idUnico).es24 = true;
+                    } else {
+                        consolidado.set(idUnico, { ...item, es24: false });
+                    }
+                });
+                return Array.from(consolidado.values()).sort((a,b) => a.diaRaw - b.diaRaw);
             };
 
-            const conteoFacturacion = {};
-            const vacantesFinales = {}; 
-            ordenDias.forEach(dia => { 
-                if(vacantesPorDia[dia]) { 
-                    const procesados = procesarGrupo(vacantesPorDia[dia]);
+            // Procesamos los datos finales y contamos unidades para el tope
+            const vacantesFinales = {};
+            ordenDias.forEach(dia => {
+                if (vacantesPorDia[dia]) {
+                    const procesados = consolidarTurnos(vacantesPorDia[dia]);
                     vacantesFinales[dia] = procesados;
                     procesados.forEach(it => {
                         conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1);
                     });
-                } 
+                }
             });
 
-            const licenciasFinales = {}; 
-            Object.keys(licenciasPorMedico).sort().forEach(grupo => { 
-                const procesados = procesarGrupo(licenciasPorMedico[grupo]);
+            const licenciasFinales = {};
+            Object.keys(licenciasPorMedico).sort().forEach(grupo => {
+                const procesados = consolidarTurnos(licenciasPorMedico[grupo]);
                 licenciasFinales[grupo] = procesados;
                 procesados.forEach(it => {
                     conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1);
                 });
             });
 
-            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { 
-                const med = medicos.find(m => String(m.id) === String(id)); 
-                return { nombre: med ? med.nombre : '?', total: cant, id }; 
+            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
+                const med = medicos.find(m => String(m.id) === String(id));
+                return { nombre: med ? med.nombre : '?', total: cant, id };
             }).sort((a,b) => b.total - a.total);
 
-            const FilaReporte = ({ item }) => ( 
-                <tr className="border-b text-xs">
-                    <td className="border p-1 text-center w-[12%]">{item.fecha}</td>
-                    <td className="border p-1 text-center bg-gray-50 w-[7%]">{!item.sadofe && !item.es24 ? 'X' : ''}</td>
-                    <td className="border p-1 text-center bg-gray-50 w-[7%]">{!item.sadofe && item.es24 ? 'X' : ''}</td>
-                    <td className="border p-1 text-center bg-blue-50 w-[7%]">{item.sadofe && !item.es24 ? 'X' : ''}</td>
-                    <td className="border p-1 text-center bg-blue-50 w-[7%]">{item.sadofe && item.es24 ? 'X' : ''}</td>
-                    <td className="border p-1 font-bold text-blue-700 text-center w-[60%]">{item.receptor}</td>
-                </tr> 
-            );
-
-            const TablaGrupo = ({ items }) => ( 
-                <div className="w-full overflow-x-auto">
-                    <table className="min-w-[700px] w-full text-sm border-collapse border border-gray-400 mb-4 bg-white">
-                        <thead className="bg-gray-200">
-                            <tr className="text-xs uppercase">
-                                <th className="border p-1 w-[12%]">Fecha</th>
-                                <th className="border p-1 w-[7%]">12 hs<br/>Sem</th>
-                                <th className="border p-1 w-[7%]">24 hs<br/>Sem</th>
-                                <th className="border p-1 w-[7%] bg-blue-50">12 hs<br/>SADOFE</th>
-                                <th className="border p-1 w-[7%] bg-blue-50">24 hs<br/>SADOFE</th>
-                                <th className="border p-1 text-center w-[60%]">Recibo/Cobra</th>
+            const TablaMinisterio = ({ items }) => (
+                <table className="w-full text-sm border-collapse border border-gray-400 mb-4 bg-white">
+                    <thead className="bg-gray-100">
+                        <tr className="text-[10px] uppercase">
+                            <th className="border p-1 w-[15%]">Fecha</th>
+                            <th className="border p-1 w-[10%]">12 hs<br/>Sem</th>
+                            <th className="border p-1 w-[10%]">24 hs<br/>Sem</th>
+                            <th className="border p-1 w-[10%] bg-blue-50">12 hs<br/>SADOFE</th>
+                            <th className="border p-1 w-[10%] bg-blue-50">24 hs<br/>SADOFE</th>
+                            <th className="border p-1 text-center">Médico que Percibe Haberes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {items.map((it, idx) => (
+                            <tr key={idx} className="border-b text-xs">
+                                <td className="border p-1 text-center font-medium">{it.fecha}</td>
+                                <td className="border p-1 text-center bg-gray-50 font-bold">{!it.sadofe && !it.es24 ? 'X' : ''}</td>
+                                <td className="border p-1 text-center bg-gray-50 font-bold">{!it.sadofe && it.es24 ? 'X' : ''}</td>
+                                <td className="border p-1 text-center bg-blue-50 font-bold">{it.sadofe && !it.es24 ? 'X' : ''}</td>
+                                <td className="border p-1 text-center bg-blue-50 font-bold">{it.sadofe && it.es24 ? 'X' : ''}</td>
+                                <td className="border p-1 text-center font-bold text-blue-800">{it.receptor}</td>
                             </tr>
-                        </thead>
-                        <tbody>{items.map((item, i) => <FilaReporte key={i} item={item} />)}</tbody>
-                    </table> 
-                </div>
+                        ))}
+                    </tbody>
+                </table>
             );
 
-            return ( 
-                <div id="reporte-ministerio" className="space-y-8 bg-white p-4 min-h-screen">
-                    <div className="w-scroll-container">
-                        <div className="min-w-[1000px] w-full">
-                            <div className="flex justify-between items-center mb-8 no-print">
-                                <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2>
-                                <div className="flex gap-2">
-                                    <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf}>{loadingPdf ? '...' : 'WhatsApp'}</Button>
-                                    <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
-                                </div>
-                            </div>
-                            
-                            <div className="mb-8 p-4 bg-gray-50 border rounded no-print">
-                                <h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3>
-                                <table className="w-full text-sm border-collapse bg-white">
-                                    <thead className="bg-gray-200">
-                                        <tr><th className="border p-2 text-left">Médico</th><th className="border p-2 text-center">Unidades (12h=1, 24h=2)</th><th className="border p-2 text-center">Estado</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        {totalesArray.map(t => (
-                                            <tr key={t.id} className={t.total > 10 ? "bg-red-100 font-bold text-red-700" : ""}>
-                                                <td className="border p-2">{t.nombre}</td>
-                                                <td className="border p-2 text-center">{t.total}</td>
-                                                <td className="border p-2 text-center">{t.total > 10 ? "⚠️ EXCEDE" : "OK"}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div>
-                            
-                            <div className="avoid-break mb-8 p-4 bg-gray-50 border rounded">
-                                <h3 className="font-bold text-lg mb-2">COBERTURA DE CARGOS VACANTES</h3>
-                                {Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes registradas.</p> : 
-                                    Object.entries(vacantesFinales).map(([dia, items]) => (
-                                        <div key={dia} className="mb-6 avoid-break">
-                                            <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4>
-                                            <TablaGrupo items={items} />
-                                        </div>
-                                    ))
-                                }
-                            </div>
-                            
-                            <div className="mt-8 avoid-break p-4 bg-gray-50 border rounded">
-                                <h3 className="font-bold text-lg mb-2">COBERTURA DE LICENCIAS</h3>
-                                {Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-500 mb-4">No hay coberturas de licencias registradas.</p> : 
-                                    Object.entries(licenciasFinales).map(([grupo, items]) => (
-                                        <div key={grupo} className="mb-6 avoid-break">
-                                            <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {grupo.toUpperCase()}</h4>
-                                            <TablaGrupo items={items} />
-                                        </div>
-                                    ))
-                                }
-                            </div>
+            return (
+                <div id="reporte-ministerio" className="bg-white p-6 rounded shadow">
+                    <div className="flex justify-between items-center mb-6 no-print">
+                        <h2 className="text-xl font-bold uppercase underline">Reporte de Guardias - {mesNombre} {year}</h2>
+                        <div className="flex gap-2">
+                            <Button variant="whatsapp" onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'share')} disabled={loadingPdf}>WhatsApp</Button>
+                            <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')} disabled={loadingPdf}>Descargar PDF</Button>
                         </div>
                     </div>
-                </div> 
+
+                    <div className="mb-8 no-print bg-red-50 p-4 border border-red-200 rounded">
+                        <h3 className="font-bold text-red-800 mb-2">Resumen de Unidades (Control de Topes)</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {totalesArray.map(t => (
+                                <div key={t.id} className={`p-2 rounded border ${t.total > 10 ? 'bg-red-200 border-red-400' : 'bg-white'}`}>
+                                    <p className="text-xs font-bold truncate">{t.nombre}</p>
+                                    <p className="text-lg font-black">{t.total} <span className="text-[10px]">Unidades</span></p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-10">
+                        {/* SECCIÓN VACANTES */}
+                        <section>
+                            <h3 className="font-black text-lg border-b-2 border-black mb-4 uppercase">Cobertura de Cargos Vacantes</h3>
+                            {Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-400">Sin movimientos.</p> : 
+                                Object.entries(vacantesFinales).map(([dia, items]) => (
+                                    <div key={dia} className="avoid-break mb-6">
+                                        <h4 className="font-bold text-sm mb-1 bg-gray-800 text-white px-2 py-1 inline-block">PEDiatra de Guardia - {dia}</h4>
+                                        <TablaMinisterio items={items} />
+                                    </div>
+                                ))
+                            }
+                        </section>
+
+                        {/* SECCIÓN LICENCIAS */}
+                        <section>
+                            <h3 className="font-black text-lg border-b-2 border-black mb-4 uppercase">Cobertura de Licencias</h3>
+                            {Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-400">Sin movimientos.</p> : 
+                                Object.entries(licenciasFinales).map(([titular, items]) => (
+                                    <div key={titular} className="avoid-break mb-6">
+                                        <h4 className="font-bold text-sm mb-1 bg-purple-700 text-white px-2 py-1 inline-block">REEMPLAZO DE: {titular.toUpperCase()}</h4>
+                                        <TablaMinisterio items={items} />
+                                    </div>
+                                ))
+                            }
+                        </section>
+                    </div>
+                </div>
             );
         }
 
