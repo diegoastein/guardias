@@ -1332,20 +1332,16 @@
         function VistaReporte() { 
             const { month, year } = getDaysInMonth(currentDate); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
-            
             const vacantesPorDia = {}; 
             const licenciasPorMedico = {}; 
-            const conteoFacturacion = {}; // Para el control de topes
+            const conteoFacturacion = {}; 
             
             const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
             
-            const esSadofe = (fechaObj) => { 
-                const day = fechaObj.getDay(); 
-                return day === 0 || day === 6; 
-            };
+            const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
 
-            // Recorremos todos los días del mes
+            // 1. Procesamiento de datos
             for (let d = 1; d <= 31; d++) {
                 const fechaObj = new Date(year, month, d); 
                 if (fechaObj.getMonth() !== month) break;
@@ -1359,174 +1355,166 @@
                 
                 if (!g) continue;
 
-                // Analizamos cada uno de los 4 slots del día
-                const slotsKeys = ['dia1', 'dia2', 'noche1', 'noche2'];
-                
-                slotsKeys.forEach(key => {
-                    const actualSlot = g[key];
-                    const templateSlot = p ? p[key] : null;
+                const analizarSlot = (slotKey) => {
+                    const actualSlot = g[slotKey];
+                    const templateSlot = p ? p[slotKey] : null;
 
-                    // Solo procesamos si la guardia está cubierta por sistema (no personal)
-                    if (actualSlot && actualSlot.estado === 'CUBIERTA' && actualSlot.medicoId && actualSlot.tipoPago === 'SISTEMA') {
-                        
-                        const medicoHizoId = String(actualSlot.medicoId);
-                        const receptorId = actualSlot.prestadorId ? String(actualSlot.prestadorId) : medicoHizoId;
-                        
-                        const titularId = templateSlot?.medicoId ? String(templateSlot.medicoId) : null;
-                        
-                        // Buscamos si el titular tiene licencia este día
-                        const licenciaDelTitular = titularId ? licencias.find(lic => 
-                            String(lic.medicoId) === titularId && 
-                            fechaStr >= lic.desde && fechaStr <= lic.hasta
-                        ) : null;
+                    // Filtro: Solo guardias CUBIERTAS por SISTEMA (excluye Arreglos Personales)
+                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
+                    
+                    const medicoHizoId = String(actualSlot.medicoId);
+                    const receptorId = actualSlot.prestadorId ? String(actualSlot.prestadorId) : medicoHizoId;
+                    const titularId = templateSlot?.medicoId ? String(templateSlot.medicoId) : null;
 
-                        const medicoHizo = medicos.find(m => String(m.id) === medicoHizoId);
-                        const receptor = medicos.find(m => String(m.id) === receptorId);
-                        
-                        if (!medicoHizo || !receptor) return;
+                    // BUSCAR LICENCIA: Verificamos si el titular de la plantilla tiene una licencia en esta fecha
+                    const detalleLic = titularId ? licencias.find(lic => 
+                        String(lic.medicoId) === titularId && 
+                        fechaStr >= lic.desde && fechaStr <= lic.hasta
+                    ) : null;
 
-                        const item = {
-                            fecha: formatDate(d, month, year),
-                            receptor: receptor.nombre,
-                            receptorId: receptorId,
-                            sadofe: esSadofe(fechaObj),
-                            diaRaw: d
-                        };
+                    const medicoHizo = medicos.find(m => String(m.id) === medicoHizoId);
+                    const receptor = medicos.find(m => String(m.id) === receptorId);
+                    
+                    if (!medicoHizo || !receptor) return;
 
-                        // CASO 1: Cobertura de Vacante (No hay titular en plantilla)
-                        if (!titularId) {
-                            if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
-                            vacantesPorDia[nombreDia].push(item);
-                        } 
-                        // CASO 2: Cobertura de Licencia (Titular en licencia y lo cubre otro médico)
-                        else if (licenciaDelTitular && titularId !== medicoHizoId) {
+                    const item = { 
+                        fecha: formatDate(d, month, year), 
+                        medico: medicoHizo.nombre, 
+                        receptor: receptor.nombre, 
+                        sadofe: esSadofe(fechaObj), 
+                        medicoId: medicoHizoId, 
+                        receptorId: receptorId, 
+                        diaRaw: d 
+                    };
+
+                    // LÓGICA DE CLASIFICACIÓN
+                    if (!titularId) {
+                        // Es vacante porque no hay nadie en la plantilla
+                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
+                        vacantesPorDia[nombreDia].push(item);
+                    } else if (detalleLic) {
+                        // Hay licencia cargada. Si el que hace la guardia no es el titular, es un reemplazo de licencia
+                        if (medicoHizoId !== titularId) {
                             const titularNombre = medicos.find(m => String(m.id) === titularId)?.nombre || 'Titular';
-                            const grupoKey = `${titularNombre} (${licenciaDelTitular.motivo})`;
-                            
-                            if (!licenciasPorMedico[grupoKey]) licenciasPorMedico[grupoKey] = [];
-                            licenciasPorMedico[grupoKey].push(item);
+                            const tituloGrupo = `${titularNombre} (${detalleLic.motivo})`;
+                            if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = [];
+                            licenciasPorMedico[tituloGrupo].push(item);
                         }
                     }
-                });
+                };
+
+                analizarSlot('dia1'); analizarSlot('dia2'); 
+                analizarSlot('noche1'); analizarSlot('noche2');
             }
 
-            // Función para agrupar 12hs en 24hs si es el mismo receptor el mismo día
-            const consolidarTurnos = (lista) => {
-                const consolidado = new Map();
+            // 2. Agrupación para detectar 24hs (mismo receptor, mismo día, mismo grupo)
+            const procesarGrupo = (lista) => {
+                const mapa = new Map();
                 lista.forEach(item => {
-                    const idUnico = `${item.fecha}-${item.receptorId}`;
-                    if (consolidado.has(idUnico)) {
-                        consolidado.get(idUnico).es24 = true;
+                    const key = `${item.fecha}-${item.receptorId}`;
+                    if (mapa.has(key)) {
+                        mapa.get(key).es24 = true;
                     } else {
-                        consolidado.set(idUnico, { ...item, es24: false });
+                        mapa.set(key, { ...item, es24: false });
                     }
                 });
-                return Array.from(consolidado.values()).sort((a,b) => a.diaRaw - b.diaRaw);
+                return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw);
             };
 
-            // Procesamos los datos finales y contamos unidades para el tope
-            const vacantesFinales = {};
-            ordenDias.forEach(dia => {
-                if (vacantesPorDia[dia]) {
-                    const procesados = consolidarTurnos(vacantesPorDia[dia]);
-                    vacantesFinales[dia] = procesados;
-                    procesados.forEach(it => {
-                        conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1);
-                    });
-                }
+            const vacantesFinales = {}; 
+            ordenDias.forEach(dia => { 
+                if(vacantesPorDia[dia]) { 
+                    const final = procesarGrupo(vacantesPorDia[dia]);
+                    vacantesFinales[dia] = final;
+                    final.forEach(it => { conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1); });
+                } 
             });
 
-            const licenciasFinales = {};
-            Object.keys(licenciasPorMedico).sort().forEach(grupo => {
-                const procesados = consolidarTurnos(licenciasPorMedico[grupo]);
-                licenciasFinales[grupo] = procesados;
-                procesados.forEach(it => {
-                    conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1);
-                });
+            const licenciasFinales = {}; 
+            Object.keys(licenciasPorMedico).sort().forEach(grupo => { 
+                const final = procesarGrupo(licenciasPorMedico[grupo]);
+                licenciasFinales[grupo] = final;
+                final.forEach(it => { conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1); });
             });
 
-            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
-                const med = medicos.find(m => String(m.id) === String(id));
-                return { nombre: med ? med.nombre : '?', total: cant, id };
+            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { 
+                const med = medicos.find(m => String(m.id) === String(id)); 
+                return { nombre: med ? med.nombre : '?', total: cant, id }; 
             }).sort((a,b) => b.total - a.total);
 
-            const TablaMinisterio = ({ items }) => (
+            const TablaGrupo = ({ items }) => ( 
                 <table className="w-full text-sm border-collapse border border-gray-400 mb-4 bg-white">
-                    <thead className="bg-gray-100">
+                    <thead className="bg-gray-200">
                         <tr className="text-[10px] uppercase">
-                            <th className="border p-1 w-[15%]">Fecha</th>
-                            <th className="border p-1 w-[10%]">12 hs<br/>Sem</th>
-                            <th className="border p-1 w-[10%]">24 hs<br/>Sem</th>
-                            <th className="border p-1 w-[10%] bg-blue-50">12 hs<br/>SADOFE</th>
-                            <th className="border p-1 w-[10%] bg-blue-50">24 hs<br/>SADOFE</th>
+                            <th className="border p-1 w-[12%]">Fecha</th>
+                            <th className="border p-1 w-[8%]">12 hs<br/>Sem</th>
+                            <th className="border p-1 w-[8%]">24 hs<br/>Sem</th>
+                            <th className="border p-1 w-[8%] bg-blue-50">12 hs<br/>SAD</th>
+                            <th className="border p-1 w-[8%] bg-blue-50">24 hs<br/>SAD</th>
                             <th className="border p-1 text-center">Médico que Percibe Haberes</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {items.map((it, idx) => (
-                            <tr key={idx} className="border-b text-xs">
+                        {items.map((it, i) => (
+                            <tr key={i} className="border-b text-xs">
                                 <td className="border p-1 text-center font-medium">{it.fecha}</td>
                                 <td className="border p-1 text-center bg-gray-50 font-bold">{!it.sadofe && !it.es24 ? 'X' : ''}</td>
                                 <td className="border p-1 text-center bg-gray-50 font-bold">{!it.sadofe && it.es24 ? 'X' : ''}</td>
                                 <td className="border p-1 text-center bg-blue-50 font-bold">{it.sadofe && !it.es24 ? 'X' : ''}</td>
                                 <td className="border p-1 text-center bg-blue-50 font-bold">{it.sadofe && it.es24 ? 'X' : ''}</td>
-                                <td className="border p-1 text-center font-bold text-blue-800">{it.receptor}</td>
+                                <td className="border p-1 text-center font-bold text-blue-700">{it.receptor}</td>
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                </table> 
             );
 
-            return (
-                <div id="reporte-ministerio" className="bg-white p-6 rounded shadow">
+            return ( 
+                <div id="reporte-ministerio" className="space-y-8 bg-white p-4">
                     <div className="flex justify-between items-center mb-6 no-print">
-                        <h2 className="text-xl font-bold uppercase underline">Reporte de Guardias - {mesNombre} {year}</h2>
+                        <h2 className="text-xl font-bold uppercase border-b-2 border-black">Reporte {mesNombre} {year}</h2>
                         <div className="flex gap-2">
-                            <Button variant="whatsapp" onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'share')} disabled={loadingPdf}>WhatsApp</Button>
-                            <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')} disabled={loadingPdf}>Descargar PDF</Button>
+                            <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')} variant="primary">Descargar PDF</Button>
                         </div>
                     </div>
-
-                    <div className="mb-8 no-print bg-red-50 p-4 border border-red-200 rounded">
-                        <h3 className="font-bold text-red-800 mb-2">Resumen de Unidades (Control de Topes)</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    
+                    <div className="mb-6 p-4 bg-gray-50 border rounded no-print">
+                        <h3 className="font-bold text-sm mb-2">Control de Topes (Unidades)</h3>
+                        <div className="flex flex-wrap gap-2">
                             {totalesArray.map(t => (
-                                <div key={t.id} className={`p-2 rounded border ${t.total > 10 ? 'bg-red-200 border-red-400' : 'bg-white'}`}>
-                                    <p className="text-xs font-bold truncate">{t.nombre}</p>
-                                    <p className="text-lg font-black">{t.total} <span className="text-[10px]">Unidades</span></p>
-                                </div>
+                                <span key={t.id} className={`px-2 py-1 rounded text-xs border ${t.total > 10 ? 'bg-red-100 border-red-300 text-red-700' : 'bg-white'}`}>
+                                    {t.nombre}: <strong>{t.total}</strong>
+                                </span>
                             ))}
                         </div>
                     </div>
 
-                    <div className="space-y-10">
-                        {/* SECCIÓN VACANTES */}
-                        <section>
-                            <h3 className="font-black text-lg border-b-2 border-black mb-4 uppercase">Cobertura de Cargos Vacantes</h3>
-                            {Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-400">Sin movimientos.</p> : 
+                    <div className="space-y-8">
+                        <div>
+                            <h3 className="font-bold text-lg mb-4 border-l-4 border-black pl-2">COBERTURA DE CARGOS VACANTES</h3>
+                            {Object.keys(vacantesFinales).length === 0 ? <p className="text-gray-400 italic">No hay vacantes cubiertas.</p> : 
                                 Object.entries(vacantesFinales).map(([dia, items]) => (
-                                    <div key={dia} className="avoid-break mb-6">
-                                        <h4 className="font-bold text-sm mb-1 bg-gray-800 text-white px-2 py-1 inline-block">PEDiatra de Guardia - {dia}</h4>
-                                        <TablaMinisterio items={items} />
+                                    <div key={dia} className="avoid-break mb-4">
+                                        <h4 className="font-bold uppercase text-xs mb-1">Pediatra de Guardia - {dia}</h4>
+                                        <TablaGrupo items={items} />
                                     </div>
                                 ))
                             }
-                        </section>
-
-                        {/* SECCIÓN LICENCIAS */}
-                        <section>
-                            <h3 className="font-black text-lg border-b-2 border-black mb-4 uppercase">Cobertura de Licencias</h3>
-                            {Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-400">Sin movimientos.</p> : 
+                        </div>
+                        
+                        <div>
+                            <h3 className="font-bold text-lg mb-4 border-l-4 border-purple-600 pl-2">COBERTURA DE LICENCIAS</h3>
+                            {Object.keys(licenciasFinales).length === 0 ? <p className="text-gray-400 italic">No hay licencias cubiertas.</p> : 
                                 Object.entries(licenciasFinales).map(([titular, items]) => (
-                                    <div key={titular} className="avoid-break mb-6">
-                                        <h4 className="font-bold text-sm mb-1 bg-purple-700 text-white px-2 py-1 inline-block">REEMPLAZO DE: {titular.toUpperCase()}</h4>
-                                        <TablaMinisterio items={items} />
+                                    <div key={titular} className="avoid-break mb-4">
+                                        <h4 className="font-bold uppercase text-xs mb-1">Reemplazo de Licencia: {titular}</h4>
+                                        <TablaGrupo items={items} />
                                     </div>
                                 ))
                             }
-                        </section>
+                        </div>
                     </div>
-                </div>
+                </div> 
             );
         }
 
