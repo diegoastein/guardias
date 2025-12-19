@@ -1332,76 +1332,60 @@
         function VistaReporte() { 
             const { month, year } = getDaysInMonth(currentDate); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
-            
             const vacantesPorDia = {}; 
             const licenciasPorMedico = {}; 
             const conteoFacturacion = {}; 
-            
             const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
             
             const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
 
-            // 1. PROCESAMIENTO TOTAL
+            // 1. BARRE EL MES Y CRUZA DATOS
             for (let d = 1; d <= 31; d++) {
                 const fechaObj = new Date(year, month, d); 
                 if (fechaObj.getMonth() !== month) break;
                 
-                // Formateo manual para asegurar match con Firebase YYYY-MM-DD
-                const fY = fechaObj.getFullYear();
-                const fM = String(fechaObj.getMonth() + 1).padStart(2, '0');
-                const fD = String(fechaObj.getDate()).padStart(2, '0');
-                const fechaStr = `${fY}-${fM}-${fD}`;
-
-                const diaSemanaIndex = fechaObj.getDay(); 
-                const nombreDia = diasSemanaNombres[diaSemanaIndex];
+                // Formato exacto YYYY-MM-DD para comparar con licencias
+                const fStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const diaIdx = fechaObj.getDay(); 
+                const nombreDia = diasSemanaNombres[diaIdx];
                 
-                const g = guardias[fechaStr]; 
-                const p = plantilla[diaSemanaIndex]; 
-                
+                const g = guardias[fStr]; 
+                const p = plantilla[diaIdx]; 
                 if (!g) continue;
 
-                const slotsKeys = ['dia1', 'dia2', 'noche1', 'noche2'];
-                
-                slotsKeys.forEach(slotKey => {
-                    const actualSlot = g[slotKey];
-                    const templateSlot = p ? p[slotKey] : null;
+                const slots = ['dia1', 'dia2', 'noche1', 'noche2'];
+                slots.forEach(sKey => {
+                    const actual = g[sKey];
+                    const temp = p ? p[sKey] : null;
 
-                    // CONDICIÓN: Guardia cubierta por sistema (no personal)
-                    if (actualSlot && actualSlot.estado === 'CUBIERTA' && actualSlot.medicoId && actualSlot.tipoPago === 'SISTEMA') {
-                        
-                        const hizoId = String(actualSlot.medicoId);
-                        const receptorId = actualSlot.prestadorId ? String(actualSlot.prestadorId) : hizoId;
-                        const titularId = templateSlot?.medicoId ? String(templateSlot.medicoId) : null;
+                    // FILTRO: Solo cubiertas por sistema (no personal)
+                    if (actual && actual.estado === 'CUBIERTA' && actual.medicoId && actual.tipoPago === 'SISTEMA') {
+                        const hizoId = String(actual.medicoId);
+                        const cobraId = actual.prestadorId ? String(actual.prestadorId) : hizoId;
+                        const titularId = temp?.medicoId ? String(temp.medicoId) : null;
 
-                        // BUSCAR LICENCIA ACTIVA PARA EL TITULAR DE LA PLANTILLA
-                        const licenciaActiva = titularId ? licencias.find(lic => {
-                            const lId = String(lic.medicoId);
-                            return lId === titularId && fechaStr >= lic.desde && fechaStr <= lic.hasta;
-                        }) : null;
-
-                        const receptorObj = medicos.find(m => String(m.id) === receptorId);
-                        if (!receptorObj) return;
+                        // BUSCAR SI EL TITULAR TIENE LICENCIA
+                        const licActiva = titularId ? licencias.find(l => String(l.medicoId) === titularId && fStr >= l.desde && fStr <= l.hasta) : null;
+                        const receptor = medicos.find(m => String(m.id) === cobraId);
+                        if (!receptor) return;
 
                         const item = { 
                             fecha: formatDate(d, month, year), 
-                            receptor: receptorObj.nombre, 
-                            receptorId: receptorId,
+                            receptor: receptor.nombre, 
+                            receptorId: cobraId, 
                             sadofe: esSadofe(fechaObj), 
                             diaRaw: d 
                         };
 
-                        // A) ES COBERTURA DE LICENCIA
-                        if (licenciaActiva && hizoId !== titularId) {
-                            const titularObj = medicos.find(m => String(m.id) === titularId);
-                            const titularNombre = titularObj ? titularObj.nombre : "Titular";
-                            const grupoKey = `${titularNombre} (${licenciaActiva.motivo})`;
-                            
-                            if (!licenciasPorMedico[grupoKey]) licenciasPorMedico[grupoKey] = [];
-                            licenciasPorMedico[grupoKey].push(item);
-                        } 
-                        // B) ES COBERTURA DE VACANTE (No hay nadie en plantilla)
-                        else if (!titularId) {
+                        if (licActiva && hizoId !== titularId) {
+                            // ES REEMPLAZO DE LICENCIA
+                            const titularNom = medicos.find(m => String(m.id) === titularId)?.nombre || 'Titular';
+                            const grupo = `${titularNom} (${licActiva.motivo})`;
+                            if (!licenciasPorMedico[grupo]) licenciasPorMedico[grupo] = [];
+                            licenciasPorMedico[grupo].push(item);
+                        } else if (!titularId) {
+                            // ES VACANTE
                             if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
                             vacantesPorDia[nombreDia].push(item);
                         }
@@ -1409,81 +1393,108 @@
                 });
             }
 
-            // 2. CONSOLIDACIÓN DE 24 HS Y CÓMPUTO DE TOPES
-            const procesarYContar = (agrupador) => {
-                const resultado = {};
-                Object.entries(agrupador).forEach(([key, lista]) => {
-                    const consolidado = new Map();
+            // 2. CONSOLIDAR 24HS Y CONTAR UNIDADES
+            const agruparYContar = (datos) => {
+                const res = {};
+                Object.entries(datos).forEach(([key, lista]) => {
+                    const mapa = new Map();
                     lista.forEach(it => {
-                        const uniqueId = `${it.fecha}-${it.receptorId}`;
-                        if (consolidado.has(uniqueId)) {
-                            consolidado.get(uniqueId).es24 = true;
-                        } else {
-                            consolidado.set(uniqueId, { ...it, es24: false });
-                        }
+                        const k = `${it.fecha}-${it.receptorId}`;
+                        if (mapa.has(k)) mapa.get(k).es24 = true;
+                        else mapa.set(k, { ...it, es24: false });
                     });
-                    const listaFinal = Array.from(consolidado.values()).sort((a,b) => a.diaRaw - b.diaRaw);
-                    resultado[key] = listaFinal;
-                    
-                    // Sumar al conteo de topes
-                    listaFinal.forEach(it => {
+                    res[key] = Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw);
+                    res[key].forEach(it => {
                         conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1);
                     });
                 });
-                return resultado;
+                return res;
             };
 
-            const vacantesFinales = procesarYContar(vacantesPorDia);
-            const licenciasFinales = procesarYContar(licenciasPorMedico);
+            const vacFinal = agruparYContar(vacantesPorDia);
+            const licFinal = agruparYContar(licenciasPorMedico);
+            const totales = Object.entries(conteoFacturacion).map(([id, cant]) => ({
+                nombre: medicos.find(m => String(m.id) === id)?.nombre || '?',
+                total: cant
+            })).sort((a,b) => b.total - a.total);
 
-            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
-                const m = medicos.find(x => String(x.id) === id);
-                return { nombre: m ? m.nombre : "Desconocido", total: cant, id };
-            }).sort((a,b) => b.total - a.total);
+            // 3. TABLA DE REPORTE (Diseño solicitado)
+            const Fila = ({ it }) => (
+                <tr className="border-b text-xs">
+                    <td className="border border-gray-400 p-1 text-center w-[12%]">{it.fecha}</td>
+                    <td className="border border-gray-400 p-1 text-center bg-gray-50 w-[7%]">{!it.sadofe && !it.es24 ? 'X' : ''}</td>
+                    <td className="border border-gray-400 p-1 text-center bg-gray-50 w-[7%]">{!it.sadofe && it.es24 ? 'X' : ''}</td>
+                    <td className="border border-gray-400 p-1 text-center bg-blue-50 w-[7%]">{it.sadofe && !it.es24 ? 'X' : ''}</td>
+                    <td className="border border-gray-400 p-1 text-center bg-blue-50 w-[7%]">{it.sadofe && it.es24 ? 'X' : ''}</td>
+                    <td className="border border-gray-400 p-1 font-bold text-blue-700 text-center">{it.receptor}</td>
+                </tr>
+            );
+
+            const Tabla = ({ items }) => (
+                <div className="w-full mb-6">
+                    <table className="w-full text-sm border-collapse border-2 border-gray-400 bg-white">
+                        <thead className="bg-gray-200">
+                            <tr className="text-[10px] uppercase">
+                                <th className="border border-gray-400 p-1">Fecha</th>
+                                <th className="border border-gray-400 p-1">12 hs<br/>Sem</th>
+                                <th className="border border-gray-400 p-1">24 hs<br/>Sem</th>
+                                <th className="border border-gray-400 p-1 bg-blue-50">12 hs<br/>SAD</th>
+                                <th className="border border-gray-400 p-1 bg-blue-50">24 hs<br/>SAD</th>
+                                <th className="border border-gray-400 p-1">Recibo de Cobro</th>
+                            </tr>
+                        </thead>
+                        <tbody>{items.map((it, i) => <Fila key={i} it={it} />)}</tbody>
+                    </table>
+                </div>
+            );
 
             return (
-                <div id="reporte-ministerio" className="bg-white p-6 rounded-lg shadow-lg">
-                    {/* ENCABEZADO Y ACCIONES */}
-                    <div className="flex justify-between items-center mb-8 border-b-2 pb-4 no-print">
-                        <h2 className="text-2xl font-black text-gray-800 uppercase">REPORTE MINISTERIAL: {mesNombre}</h2>
-                        <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')} variant="primary" className="shadow-blue-500/50 shadow-lg">Descargar PDF</Button>
-                    </div>
-
-                    {/* CONTROL DE TOPES - CRUCIAL */}
-                    <div className="mb-10 bg-slate-900 text-white p-5 rounded-xl shadow-inner no-print">
-                        <h3 className="text-orange-400 font-bold mb-4 flex items-center gap-2">⚠️ CONTROL DE FACTURACIÓN (TOPES)</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                            {totalesArray.map(t => (
-                                <div key={t.id} className={`p-3 rounded-lg border ${t.total > 10 ? 'bg-red-500/20 border-red-500' : 'bg-slate-800 border-slate-700'}`}>
-                                    <p className="text-[10px] text-slate-400 uppercase font-bold truncate">{t.nombre}</p>
-                                    <p className="text-xl font-black">{t.total} <span className="text-xs font-normal">u.</span></p>
-                                </div>
-                            ))}
-                            {totalesArray.length === 0 && <p className="text-slate-500 text-sm italic">No hay unidades para liquidar este mes.</p>}
+                <div id="reporte-ministerio" className="space-y-8 bg-white p-4">
+                    <div className="flex justify-between items-center mb-8 no-print">
+                        <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias Pediatría - {mesNombre} {year}</h2>
+                        <div className="flex gap-2">
+                            <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary">Descargar PDF</Button>
                         </div>
                     </div>
 
-                    {/* TABLAS DE REPORTE */}
-                    <div className="space-y-12">
-                        <section>
-                            <h3 className="text-xl font-black mb-6 bg-blue-600 text-white px-4 py-2 rounded-r-full inline-block">1. COBERTURA DE CARGOS VACANTES</h3>
-                            {ordenDias.map(dia => vacantesFinales[dia] && (
-                                <div key={dia} className="mb-8 avoid-break">
-                                    <h4 className="font-bold text-sm text-blue-800 mb-2 uppercase tracking-widest border-b">Pediatra de Guardia - {dia}</h4>
-                                    <TablaEstilo items={vacantesFinales[dia]} />
-                                </div>
-                            ))}
-                        </section>
+                    <div className="mb-8 p-4 bg-gray-50 border rounded no-print">
+                        <h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10)</h3>
+                        <table className="w-full text-sm border-collapse bg-white border">
+                            <thead className="bg-gray-200">
+                                <tr><th className="border p-2 text-left">Médico</th><th className="border p-2 text-center">Unidades</th><th className="border p-2 text-center">Estado</th></tr>
+                            </thead>
+                            <tbody>
+                                {totales.map((t, i) => (
+                                    <tr key={i} className={t.total > 10 ? "bg-red-100 font-bold" : ""}>
+                                        <td className="border p-2">{t.nombre}</td>
+                                        <td className="border p-2 text-center">{t.total}</td>
+                                        <td className="border p-2 text-center">{t.total > 10 ? "EXCEDIDO" : "OK"}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
 
-                        <section>
-                            <h3 className="text-xl font-black mb-6 bg-purple-600 text-white px-4 py-2 rounded-r-full inline-block">2. COBERTURA DE LICENCIAS</h3>
-                            {Object.entries(licenciasFinales).map(([titular, items]) => (
-                                <div key={titular} className="mb-8 avoid-break">
-                                    <h4 className="font-bold text-sm text-purple-800 mb-2 uppercase tracking-widest border-b">Reemplazo: {titular}</h4>
-                                    <TablaEstilo items={items} />
-                                </div>
-                            ))}
-                        </section>
+                    <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase underline">Guardias Pediatría - {mesNombre}</h2></div>
+                    
+                    <div>
+                        <h3 className="font-bold text-lg mb-2 uppercase">COBERTURA DE CARGOS VACANTES</h3>
+                        {ordenDias.map(dia => vacFinal[dia] && (
+                            <div key={dia} className="avoid-break mb-4">
+                                <h4 className="font-bold uppercase text-xs mb-1 border-b">CARGO VACANTE: {dia.toUpperCase()}</h4>
+                                <Tabla items={vacFinal[dia]} />
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-8">
+                        <h3 className="font-bold text-lg mb-2 uppercase">COBERTURA DE LICENCIAS</h3>
+                        {Object.entries(licFinal).map(([titular, items]) => (
+                            <div key={titular} className="avoid-break mb-4">
+                                <h4 className="font-bold uppercase text-xs mb-1 border-b">LICENCIA: {titular.toUpperCase()}</h4>
+                                <Tabla items={items} />
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
