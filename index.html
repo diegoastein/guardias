@@ -309,17 +309,23 @@
                 const guardiaActual = guardias[fechaStr] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
                 const [form, setForm] = useState(guardiaActual);
                 
-                const SlotForm = ({ label, slotData, onChangeSlot, slotKey }) => {
-                    const data = slotData || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
-                    
-                    // 1. Identificar si el titular de la plantilla está de licencia hoy
+                // Función interna para determinar si un slot específico de la plantilla está en licencia
+                const obtenerLicenciaParaSlot = (slotKey) => {
                     const realDayIdx = (new Date(year, month, selectedDay).getDay());
                     const configPlantilla = plantilla[realDayIdx];
                     const titularId = configPlantilla?.[slotKey]?.medicoId;
-                    const licenciaTitular = titularId ? licencias.find(lic => 
+                    
+                    if (!titularId) return null;
+                    
+                    return licencias.find(lic => 
                         String(lic.medicoId) === String(titularId) && 
                         fechaStr >= lic.desde && fechaStr <= lic.hasta
-                    ) : null;
+                    );
+                };
+
+                const SlotForm = ({ label, slotData, onChangeSlot, slotKey }) => {
+                    const data = slotData || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
+                    const licenciaTitular = obtenerLicenciaParaSlot(slotKey);
 
                     const medicoSeleccionado = medicos.find(m => String(m.id) === String(data.medicoId));
                     const puedeDerivar = data.tipoPago === 'SISTEMA' && medicoSeleccionado && medicoSeleccionado.tieneRecibo;
@@ -329,59 +335,68 @@
                     const prestadoresDisponibles = medicosOrdenados.filter(m => m.tieneRecibo && !estaDeLicencia(m.id, fechaStr));
 
                     return (
-                        <div className="bg-gray-50 p-2 border mb-2 text-sm rounded">
+                        <div className={`p-2 border mb-2 text-sm rounded transition-colors ${licenciaTitular ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'}`}>
                             <div className="flex justify-between items-center mb-1">
-                                <span className="font-bold">{label}</span>
+                                <span className={`font-bold ${licenciaTitular ? 'text-purple-900' : 'text-gray-700'}`}>{label}</span>
                                 {licenciaTitular && (
-                                    <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                                        TITULAR LICENCIA
+                                    <span className="bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">
+                                        TITULAR EN LICENCIA
                                     </span>
                                 )}
                             </div>
 
-                            {/* Aviso de Reemplazo si hay licencia cargada */}
                             {licenciaTitular && (
-                                <div className="mb-2 p-1 bg-purple-50 border border-purple-200 rounded text-[11px] text-purple-800">
-                                    <strong>Reemplazo sugerido:</strong> {licenciaTitular.detalleCobertura || "No especificado"}
+                                <div className="mb-2 p-1.5 bg-white border border-purple-300 rounded text-[11px] text-purple-800 shadow-sm">
+                                    <strong>Nota de reemplazo:</strong> {licenciaTitular.detalleCobertura || "No especificado en el panel de licencias."}
                                 </div>
                             )}
 
-                            <select className="w-full mb-1 border rounded p-1" value={data.estado} onChange={e => onChangeSlot({...data, estado: e.target.value})}>
+                            <select 
+                                className={`w-full mb-1 border rounded p-1 ${licenciaTitular && data.estado === 'VACANTE' ? 'ring-2 ring-purple-400' : ''}`} 
+                                value={data.estado} 
+                                onChange={e => onChangeSlot({...data, estado: e.target.value})}
+                            >
                                 <option value="CUBIERTA">Cubierta</option>
                                 <option value="VACANTE">Vacante</option>
                                 <option value="LICENCIA_SIAPE">Licencia SIAPE</option>
                             </select>
 
                             {data.estado === 'CUBIERTA' && <>
-                                <select className="w-full mb-1 border rounded p-1 bg-white font-medium" value={data.medicoId || ''} onChange={e => {
-                                    const newMedicoId = e.target.value;
-                                    const newMedico = medicos.find(m => String(m.id) === String(newMedicoId));
-                                    let newPrestadorId = data.prestadorId;
-                                    if (newMedico && !newMedico.tieneRecibo) { } else { if (!data.derivado) newPrestadorId = ''; }
-                                    onChangeSlot({...data, medicoId: newMedicoId, prestadorId: newPrestadorId});
-                                }}>
-                                    <option value="">-- Quién cubre hoy? --</option>
+                                <select 
+                                    className="w-full mb-1 border rounded p-1 bg-white font-medium focus:ring-2 focus:ring-blue-500" 
+                                    value={data.medicoId || ''} 
+                                    onChange={e => {
+                                        const newMedicoId = e.target.value;
+                                        const newMedico = medicos.find(m => String(m.id) === String(newMedicoId));
+                                        let newPrestadorId = data.prestadorId;
+                                        if (newMedico && !newMedico.tieneRecibo) { } else { if (!data.derivado) newPrestadorId = ''; }
+                                        onChangeSlot({...data, medicoId: newMedicoId, prestadorId: newPrestadorId});
+                                    }}
+                                >
+                                    <option value="">-- Seleccionar Médico --</option>
                                     {medicosDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
                                 </select>
 
-                                <select className="w-full mb-1 border rounded p-1 text-xs" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}>
-                                    <option value="SISTEMA">Sistema (Hospital)</option>
-                                    <option value="PERSONAL">Arreglo Personal</option>
-                                </select>
-
-                                {puedeDerivar && (
-                                    <div className="flex items-center mb-1 bg-blue-50 p-1 rounded">
-                                        <input type="checkbox" id={`deriv-${label}`} checked={data.derivado || false} onChange={e => { 
-                                            const esDerivado = e.target.checked; 
-                                            onChangeSlot({ ...data, derivado: esDerivado, prestadorId: esDerivado ? data.prestadorId : '' }); 
-                                        }} /> 
-                                        <label htmlFor={`deriv-${label}`} className="ml-1 text-[10px] text-gray-600 cursor-pointer">Derivar cobro (usa recibo de otro)</label>
-                                    </div>
-                                )}
+                                <div className="grid grid-cols-2 gap-1 mb-1">
+                                    <select className="border rounded p-1 text-[11px]" value={data.tipoPago} onChange={e => onChangeSlot({...data, tipoPago: e.target.value})}>
+                                        <option value="SISTEMA">Sistema</option>
+                                        <option value="PERSONAL">Personal</option>
+                                    </select>
+                                    
+                                    {puedeDerivar && (
+                                        <div className="flex items-center justify-center bg-blue-100 rounded border border-blue-200">
+                                            <input type="checkbox" id={`deriv-${label}-${slotKey}`} checked={data.derivado || false} onChange={e => { 
+                                                const esDerivado = e.target.checked; 
+                                                onChangeSlot({ ...data, derivado: esDerivado, prestadorId: esDerivado ? data.prestadorId : '' }); 
+                                            }} /> 
+                                            <label htmlFor={`deriv-${label}-${slotKey}`} className="ml-1 text-[9px] text-blue-700 font-bold cursor-pointer uppercase">Derivar</label>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {necesitaPrestamista && (
-                                    <select className="w-full border rounded p-1 bg-yellow-100 text-xs" value={data.prestadorId||''} onChange={e=>onChangeSlot({...data, prestadorId: e.target.value})}>
-                                        <option value="">Seleccionar quién cobra...</option>
+                                    <select className="w-full border rounded p-1 bg-yellow-100 text-[11px]" value={data.prestadorId||''} onChange={e=>onChangeSlot({...data, prestadorId: e.target.value})}>
+                                        <option value="">¿Quién presta el recibo?</option>
                                         {prestadoresDisponibles.map(m=><option key={m.id} value={m.id}>{m.nombre}</option>)}
                                     </select>
                                 )}
@@ -391,29 +406,32 @@
                 };
 
                 return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                        <div className="bg-white rounded-lg p-5 w-full max-w-2xl shadow-2xl">
-                            <div className="flex justify-between items-center mb-4 border-b pb-2">
-                                <h3 className="font-bold text-lg">Guardia del {formatDate(selectedDay, month, year)}</h3>
-                                <button onClick={()=>setSelectedDay(null)} className="text-gray-400 hover:text-gray-600"><XCircle/></button>
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                        <div className="bg-white rounded-xl p-6 w-full max-w-3xl shadow-2xl border-t-8 border-blue-600">
+                            <div className="flex justify-between items-center mb-5 border-b pb-3">
+                                <div>
+                                    <h3 className="font-bold text-xl text-gray-800">Gestionar Guardia</h3>
+                                    <p className="text-sm text-gray-500 font-medium">{formatDate(selectedDay, month, year)}</p>
+                                </div>
+                                <button onClick={()=>setSelectedDay(null)} className="text-gray-400 hover:text-red-500 transition-colors"><XCircle/></button>
                             </div>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <h4 className="font-bold text-orange-600 mb-2 flex items-center gap-2">☀️ Turno Día</h4>
-                                    <SlotForm label="M1" slotKey="dia1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/>
-                                    <SlotForm label="M2" slotKey="dia2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-1">
+                                    <h4 className="font-bold text-orange-600 mb-3 flex items-center gap-2 border-b border-orange-100 pb-1">☀️ Turno Mañana/Tarde (12hs)</h4>
+                                    <SlotForm label="Médico 1" slotKey="dia1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/>
+                                    <SlotForm label="Médico 2" slotKey="dia2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/>
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-indigo-600 mb-2 flex items-center gap-2">🌙 Turno Noche</h4>
-                                    <SlotForm label="M1" slotKey="noche1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/>
-                                    <SlotForm label="M2" slotKey="noche2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/>
+                                <div className="space-y-1">
+                                    <h4 className="font-bold text-indigo-600 mb-3 flex items-center gap-2 border-b border-indigo-100 pb-1">🌙 Turno Noche (12hs)</h4>
+                                    <SlotForm label="Médico 1" slotKey="noche1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/>
+                                    <SlotForm label="Médico 2" slotKey="noche2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-                                <Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button>
-                                <Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}} variant="primary" className="px-8">
+                            <div className="flex justify-end gap-3 mt-8 pt-5 border-t">
+                                <Button onClick={()=>setSelectedDay(null)} variant="secondary" className="px-6">Cancelar</Button>
+                                <Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}} variant="primary" className="px-10 shadow-lg shadow-blue-200">
                                     Guardar Cambios
                                 </Button>
                             </div>
