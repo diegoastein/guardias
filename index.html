@@ -1240,35 +1240,86 @@
             const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
             const vacantesPorDia = {}; const licenciasPorMedico = {}; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
+            
             for (let d = 1; d <= 31; d++) {
                 const fechaObj = new Date(year, month, d); if (fechaObj.getMonth() !== month) break;
-                const fechaStr = fechaObj.toISOString().split('T')[0]; const diaSemanaIndex = fechaObj.getDay(); const nombreDia = diasSemanaNombres[diaSemanaIndex];
+                const fechaStr = fechaObj.toISOString().split('T')[0].slice(0, 10); 
+                const diaSemanaIndex = fechaObj.getDay(); 
+                const nombreDia = diasSemanaNombres[diaSemanaIndex];
                 const g = guardias[fechaStr]; const p = plantilla[diaSemanaIndex]; 
+                
                 if (!g) continue;
+
                 const analizarSlot = (actualSlot, templateSlot) => {
-                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
+                    // Validamos que el slot exista y que no sea un arreglo personal (que no van al reporte)
+                    if (!actualSlot || actualSlot.estado === 'VACANTE' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
+                    
                     const medicoActual = medicos.find(m => String(m.id) === String(actualSlot.medicoId));
                     const prestador = actualSlot.prestadorId ? medicos.find(m => String(m.id) === String(actualSlot.prestadorId)) : null;
                     const receptor = prestador ? prestador : medicoActual; 
                     if (!receptor || !medicoActual) return;
+
                     const esVacanteOriginal = !templateSlot || !templateSlot.medicoId;
+                    
+                    // LÓGICA DE DETECCIÓN DE LICENCIA:
+                    // Se considera licencia si: 
+                    // 1. El estado se marcó manualmente como LICENCIA_SIAPE en el editor.
+                    // 2. O si el médico titular de la plantilla está de licencia según el registro de licencias.
+                    const marcadoComoLicencia = actualSlot.estado === 'LICENCIA_SIAPE';
+                    const titularId = templateSlot?.medicoId;
+                    const titularEnLicencia = titularId && estaDeLicencia(titularId, fechaStr);
+
                     let medicoOriginal = null;
-                    if (!esVacanteOriginal && String(templateSlot.medicoId) !== String(actualSlot.medicoId)) { medicoOriginal = medicos.find(m => String(m.id) === String(templateSlot.medicoId)); }
-                    const item = { fecha: formatDate(d, month, year), medico: medicoActual.nombre, receptor: receptor.nombre, sadofe: esSadofe(fechaObj), medicoId: medicoActual.id, receptorId: receptor.id, diaRaw: d, medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' };
-                    if (esVacanteOriginal) { if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; vacantesPorDia[nombreDia].push(item); } 
-                    else if (medicoOriginal) { const nombreTitular = medicoOriginal.nombre; const detalleLic = obtenerDetalleLicencia(templateSlot.medicoId, fechaStr); const motivoLic = detalleLic ? detalleLic.motivo : 'Licencia'; const tituloGrupo = `${nombreTitular} (${motivoLic})`; if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = []; licenciasPorMedico[tituloGrupo].push(item); }
+                    if (titularId) {
+                        medicoOriginal = medicos.find(m => String(m.id) === String(titularId));
+                    }
+
+                    const item = { 
+                        fecha: formatDate(d, month, year), 
+                        medico: medicoActual.nombre, 
+                        receptor: receptor.nombre, 
+                        sadofe: esSadofe(fechaObj), 
+                        medicoId: medicoActual.id, 
+                        receptorId: receptor.id, 
+                        diaRaw: d, 
+                        medicoOriginal: medicoOriginal ? medicoOriginal.nombre : '?' 
+                    };
+
+                    // Clasificación para el reporte
+                    if (marcadoComoLicencia || titularEnLicencia) {
+                        // Es una cobertura de licencia
+                        const nombreTitular = medicoOriginal ? medicoOriginal.nombre : 'Titular';
+                        const detalleLic = titularId ? obtenerDetalleLicencia(titularId, fechaStr) : null;
+                        const motivoLic = marcadoComoLicencia ? "Licencia SIAPE" : (detalleLic ? detalleLic.motivo : 'Licencia');
+                        
+                        const tituloGrupo = `${nombreTitular} (${motivoLic})`;
+                        if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = [];
+                        licenciasPorMedico[tituloGrupo].push(item);
+                    } 
+                    else if (esVacanteOriginal) {
+                        // Es una cobertura de vacante
+                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = []; 
+                        vacantesPorDia[nombreDia].push(item); 
+                    }
+                    // Si no es ninguna de las anteriores y el médico es el titular, no aparece en este reporte (cobra por sueldo)
                 };
+
                 analizarSlot(g.dia1, p?.dia1); analizarSlot(g.dia2, p?.dia2); analizarSlot(g.noche1, p?.noche1); analizarSlot(g.noche2, p?.noche2);
             }
+
+            // (El resto del código de procesamiento y renderizado se mantiene igual)
             const procesarGrupo = (lista) => { const mapa = new Map(); lista.forEach(item => { const key = item.fecha + '-' + item.receptorId; if (mapa.has(key)) { mapa.get(key).es24 = true; } else { item.es24 = false; mapa.set(key, item); } }); return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw); };
             const conteoFacturacion = {}; 
-            const sumarAlTopeRaw = (lista) => { lista.forEach(item => { conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + 1; }); };
-            const vacantesRaw = []; const licenciasRaw = []; Object.values(vacantesPorDia).forEach(diaLista => vacantesRaw.push(...diaLista)); Object.values(licenciasPorMedico).forEach(medicoLista => licenciasRaw.push(...medicoLista)); sumarAlTopeRaw(vacantesRaw); sumarAlTopeRaw(licenciasRaw);
-            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); } });
-            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); });
+            const sumarAlTopeRaw = (lista) => { lista.forEach(item => { 
+                const valor = item.es24 ? 2 : 1;
+                conteoFacturacion[item.receptorId] = (conteoFacturacion[item.receptorId] || 0) + valor; 
+            }); };
+            
+            const vacantesFinales = {}; ordenDias.forEach(dia => { if(vacantesPorDia[dia]) { vacantesFinales[dia] = procesarGrupo(vacantesPorDia[dia]); sumarAlTopeRaw(vacantesFinales[dia]); } });
+            const licenciasFinales = {}; Object.keys(licenciasPorMedico).sort().forEach(medico => { licenciasFinales[medico] = procesarGrupo(licenciasPorMedico[medico]); sumarAlTopeRaw(licenciasFinales[medico]); });
+            
             const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { const med = medicos.find(m => String(m.id) === String(id)); return { nombre: med ? med.nombre : '?', total: cant, id }; }).sort((a,b) => b.total - a.total);
             
-            // REPORTE FILA 
             const FilaReporte = ({ item }) => ( 
                 <tr className="border-b text-xs">
                     <td className="border p-1 text-center w-[12%]">{item.fecha}</td>
@@ -1280,7 +1331,6 @@
                 </tr> 
             );
             
-            // REPORTE TABLA
             const TablaGrupo = ({ items }) => ( 
                 <div className="w-full overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm border-collapse border border-gray-400 mb-4 bg-white">
@@ -1301,26 +1351,23 @@
 
             return ( 
             <div id="reporte-ministerio" className="space-y-8 bg-white p-4 min-h-screen">
-                {/* Contenedor que permite el scroll horizontal en pantallas pequeñas */}
                 <div className="w-scroll-container">
-                    {/* Contenido que debe ocupar todo el ancho */}
                     <div className="min-w-[1000px] w-full">
                         <div className="flex justify-between items-center mb-8 no-print">
-                            <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2>
+                            <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Reporte de Reemplazos - {mesNombre} {year}</h2>
                             <div className="flex gap-2">
-                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
-                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
                             </div>
                         </div>
                         
-                        {/* CONTROL DE TOPES */}
                         <div className="mb-8 p-4 bg-gray-50 border rounded no-print">
                             <h3 className="font-bold text-lg mb-2">Control de Topes (Máx 10 Unidades)</h3>
                             <table className="w-full text-sm border-collapse bg-white">
                                 <thead className="bg-gray-200">
                                     <tr>
                                         <th className="border p-2 text-left">Médico</th>
-                                        <th className="border p-2 text-center">Total Unidades (12hs=1 / 24hs=2)</th>
+                                        <th className="border p-2 text-center">Total Unidades</th>
                                         <th className="border p-2 text-center">Estado</th>
                                     </tr>
                                 </thead>
@@ -1332,34 +1379,29 @@
                                             <td className="border p-2 text-center">{t.total > 10 ? "EXCEDIDO" : "OK"}</td>
                                         </tr>
                                     ))}
-                                    {totalesArray.length === 0 && <tr><td colSpan="3" className="p-2 text-center italic">Sin datos.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
                         
-                        <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Guardias de Pediatría - {mesNombre} {year}</h2></div>
+                        <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase">Reporte de Reemplazos - {mesNombre} {year}</h2></div>
                         
-                        {/* COBERTURA DE CARGOS VACANTES (Misma apariencia que Control de Topes) */}
                         <div className="avoid-break mb-8 p-4 bg-gray-50 border rounded">
                             <h3 className="font-bold text-lg mb-2">COBERTURA DE CARGOS VACANTES</h3>
-                            {Object.keys(vacantesFinales).length === 0 ? 
-                                <p className="italic text-gray-500 mb-4">No hay coberturas de vacantes.</p> : 
+                            {Object.keys(vacantesFinales).length === 0 ? <p className="italic text-gray-500">No hay coberturas de vacantes.</p> : 
                                 Object.entries(vacantesFinales).map(([dia, items]) => (
                                     <div key={dia} className="mb-6 avoid-break">
-                                        <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante Pediatra {dia.toUpperCase()}</h4>
+                                        <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Cargo Vacante {dia.toUpperCase()}</h4>
                                         <TablaGrupo items={items} />
                                     </div>
                                 ))}
                         </div>
                         
-                        {/* COBERTURA DE LICENCIAS (Misma apariencia que Control de Topes) */}
                         <div className="mt-8 avoid-break p-4 bg-gray-50 border rounded">
                             <h3 className="font-bold text-lg mb-2">COBERTURA DE LICENCIAS</h3>
-                            {Object.keys(licenciasFinales).length === 0 ? 
-                                <p className="italic text-gray-500 mb-4">No hay coberturas de licencias.</p> : 
+                            {Object.keys(licenciasFinales).length === 0 ? <p className="italic text-gray-500">No hay coberturas de licencias.</p> : 
                                 Object.entries(licenciasFinales).map(([medico, items]) => (
                                     <div key={medico} className="mb-6 avoid-break">
-                                        <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Licencia {medico}</h4>
+                                        <h4 className="font-bold uppercase text-sm mb-1 border-b border-gray-300 pb-1">Reemplazo de: {medico}</h4>
                                         <TablaGrupo items={items} />
                                     </div>
                                 ))}
