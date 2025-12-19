@@ -1332,6 +1332,7 @@
         function VistaReporte() { 
             const { month, year } = getDaysInMonth(currentDate); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
+            
             const vacantesPorDia = {}; 
             const licenciasPorMedico = {}; 
             const conteoFacturacion = {}; 
@@ -1341,12 +1342,17 @@
             
             const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
 
-            // 1. Procesamiento de datos
+            // 1. PROCESAMIENTO TOTAL
             for (let d = 1; d <= 31; d++) {
                 const fechaObj = new Date(year, month, d); 
                 if (fechaObj.getMonth() !== month) break;
                 
-                const fechaStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                // Formateo manual para asegurar match con Firebase YYYY-MM-DD
+                const fY = fechaObj.getFullYear();
+                const fM = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                const fD = String(fechaObj.getDate()).padStart(2, '0');
+                const fechaStr = `${fY}-${fM}-${fD}`;
+
                 const diaSemanaIndex = fechaObj.getDay(); 
                 const nombreDia = diasSemanaNombres[diaSemanaIndex];
                 
@@ -1355,168 +1361,160 @@
                 
                 if (!g) continue;
 
-                const analizarSlot = (slotKey) => {
+                const slotsKeys = ['dia1', 'dia2', 'noche1', 'noche2'];
+                
+                slotsKeys.forEach(slotKey => {
                     const actualSlot = g[slotKey];
                     const templateSlot = p ? p[slotKey] : null;
 
-                    // Filtro: Solo guardias CUBIERTAS por SISTEMA (excluye Arreglos Personales)
-                    if (!actualSlot || actualSlot.estado !== 'CUBIERTA' || !actualSlot.medicoId || actualSlot.tipoPago === 'PERSONAL') return;
-                    
-                    const medicoHizoId = String(actualSlot.medicoId);
-                    const receptorId = actualSlot.prestadorId ? String(actualSlot.prestadorId) : medicoHizoId;
-                    const titularId = templateSlot?.medicoId ? String(templateSlot.medicoId) : null;
+                    // CONDICIÓN: Guardia cubierta por sistema (no personal)
+                    if (actualSlot && actualSlot.estado === 'CUBIERTA' && actualSlot.medicoId && actualSlot.tipoPago === 'SISTEMA') {
+                        
+                        const hizoId = String(actualSlot.medicoId);
+                        const receptorId = actualSlot.prestadorId ? String(actualSlot.prestadorId) : hizoId;
+                        const titularId = templateSlot?.medicoId ? String(templateSlot.medicoId) : null;
 
-                    // BUSCAR LICENCIA: Verificamos si el titular de la plantilla tiene una licencia en esta fecha
-                    const detalleLic = titularId ? licencias.find(lic => 
-                        String(lic.medicoId) === titularId && 
-                        fechaStr >= lic.desde && fechaStr <= lic.hasta
-                    ) : null;
+                        // BUSCAR LICENCIA ACTIVA PARA EL TITULAR DE LA PLANTILLA
+                        const licenciaActiva = titularId ? licencias.find(lic => {
+                            const lId = String(lic.medicoId);
+                            return lId === titularId && fechaStr >= lic.desde && fechaStr <= lic.hasta;
+                        }) : null;
 
-                    const medicoHizo = medicos.find(m => String(m.id) === medicoHizoId);
-                    const receptor = medicos.find(m => String(m.id) === receptorId);
-                    
-                    if (!medicoHizo || !receptor) return;
+                        const receptorObj = medicos.find(m => String(m.id) === receptorId);
+                        if (!receptorObj) return;
 
-                    const item = { 
-                        fecha: formatDate(d, month, year), 
-                        medico: medicoHizo.nombre, 
-                        receptor: receptor.nombre, 
-                        sadofe: esSadofe(fechaObj), 
-                        medicoId: medicoHizoId, 
-                        receptorId: receptorId, 
-                        diaRaw: d 
-                    };
+                        const item = { 
+                            fecha: formatDate(d, month, year), 
+                            receptor: receptorObj.nombre, 
+                            receptorId: receptorId,
+                            sadofe: esSadofe(fechaObj), 
+                            diaRaw: d 
+                        };
 
-                    // LÓGICA DE CLASIFICACIÓN
-                    if (!titularId) {
-                        // Es vacante porque no hay nadie en la plantilla
-                        if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
-                        vacantesPorDia[nombreDia].push(item);
-                    } else if (detalleLic) {
-                        // Hay licencia cargada. Si el que hace la guardia no es el titular, es un reemplazo de licencia
-                        if (medicoHizoId !== titularId) {
-                            const titularNombre = medicos.find(m => String(m.id) === titularId)?.nombre || 'Titular';
-                            const tituloGrupo = `${titularNombre} (${detalleLic.motivo})`;
-                            if (!licenciasPorMedico[tituloGrupo]) licenciasPorMedico[tituloGrupo] = [];
-                            licenciasPorMedico[tituloGrupo].push(item);
+                        // A) ES COBERTURA DE LICENCIA
+                        if (licenciaActiva && hizoId !== titularId) {
+                            const titularObj = medicos.find(m => String(m.id) === titularId);
+                            const titularNombre = titularObj ? titularObj.nombre : "Titular";
+                            const grupoKey = `${titularNombre} (${licenciaActiva.motivo})`;
+                            
+                            if (!licenciasPorMedico[grupoKey]) licenciasPorMedico[grupoKey] = [];
+                            licenciasPorMedico[grupoKey].push(item);
+                        } 
+                        // B) ES COBERTURA DE VACANTE (No hay nadie en plantilla)
+                        else if (!titularId) {
+                            if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
+                            vacantesPorDia[nombreDia].push(item);
                         }
                     }
-                };
-
-                analizarSlot('dia1'); analizarSlot('dia2'); 
-                analizarSlot('noche1'); analizarSlot('noche2');
+                });
             }
 
-            // 2. Agrupación para detectar 24hs (mismo receptor, mismo día, mismo grupo)
-            const procesarGrupo = (lista) => {
-                const mapa = new Map();
-                lista.forEach(item => {
-                    const key = `${item.fecha}-${item.receptorId}`;
-                    if (mapa.has(key)) {
-                        mapa.get(key).es24 = true;
-                    } else {
-                        mapa.set(key, { ...item, es24: false });
-                    }
+            // 2. CONSOLIDACIÓN DE 24 HS Y CÓMPUTO DE TOPES
+            const procesarYContar = (agrupador) => {
+                const resultado = {};
+                Object.entries(agrupador).forEach(([key, lista]) => {
+                    const consolidado = new Map();
+                    lista.forEach(it => {
+                        const uniqueId = `${it.fecha}-${it.receptorId}`;
+                        if (consolidado.has(uniqueId)) {
+                            consolidado.get(uniqueId).es24 = true;
+                        } else {
+                            consolidado.set(uniqueId, { ...it, es24: false });
+                        }
+                    });
+                    const listaFinal = Array.from(consolidado.values()).sort((a,b) => a.diaRaw - b.diaRaw);
+                    resultado[key] = listaFinal;
+                    
+                    // Sumar al conteo de topes
+                    listaFinal.forEach(it => {
+                        conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1);
+                    });
                 });
-                return Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw);
+                return resultado;
             };
 
-            const vacantesFinales = {}; 
-            ordenDias.forEach(dia => { 
-                if(vacantesPorDia[dia]) { 
-                    const final = procesarGrupo(vacantesPorDia[dia]);
-                    vacantesFinales[dia] = final;
-                    final.forEach(it => { conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1); });
-                } 
-            });
+            const vacantesFinales = procesarYContar(vacantesPorDia);
+            const licenciasFinales = procesarYContar(licenciasPorMedico);
 
-            const licenciasFinales = {}; 
-            Object.keys(licenciasPorMedico).sort().forEach(grupo => { 
-                const final = procesarGrupo(licenciasPorMedico[grupo]);
-                licenciasFinales[grupo] = final;
-                final.forEach(it => { conteoFacturacion[it.receptorId] = (conteoFacturacion[it.receptorId] || 0) + (it.es24 ? 2 : 1); });
-            });
-
-            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => { 
-                const med = medicos.find(m => String(m.id) === String(id)); 
-                return { nombre: med ? med.nombre : '?', total: cant, id }; 
+            const totalesArray = Object.entries(conteoFacturacion).map(([id, cant]) => {
+                const m = medicos.find(x => String(x.id) === id);
+                return { nombre: m ? m.nombre : "Desconocido", total: cant, id };
             }).sort((a,b) => b.total - a.total);
 
-            const TablaGrupo = ({ items }) => ( 
-                <table className="w-full text-sm border-collapse border border-gray-400 mb-4 bg-white">
-                    <thead className="bg-gray-200">
-                        <tr className="text-[10px] uppercase">
-                            <th className="border p-1 w-[12%]">Fecha</th>
-                            <th className="border p-1 w-[8%]">12 hs<br/>Sem</th>
-                            <th className="border p-1 w-[8%]">24 hs<br/>Sem</th>
-                            <th className="border p-1 w-[8%] bg-blue-50">12 hs<br/>SAD</th>
-                            <th className="border p-1 w-[8%] bg-blue-50">24 hs<br/>SAD</th>
-                            <th className="border p-1 text-center">Médico que Percibe Haberes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {items.map((it, i) => (
-                            <tr key={i} className="border-b text-xs">
-                                <td className="border p-1 text-center font-medium">{it.fecha}</td>
-                                <td className="border p-1 text-center bg-gray-50 font-bold">{!it.sadofe && !it.es24 ? 'X' : ''}</td>
-                                <td className="border p-1 text-center bg-gray-50 font-bold">{!it.sadofe && it.es24 ? 'X' : ''}</td>
-                                <td className="border p-1 text-center bg-blue-50 font-bold">{it.sadofe && !it.es24 ? 'X' : ''}</td>
-                                <td className="border p-1 text-center bg-blue-50 font-bold">{it.sadofe && it.es24 ? 'X' : ''}</td>
-                                <td className="border p-1 text-center font-bold text-blue-700">{it.receptor}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table> 
-            );
-
-            return ( 
-                <div id="reporte-ministerio" className="space-y-8 bg-white p-4">
-                    <div className="flex justify-between items-center mb-6 no-print">
-                        <h2 className="text-xl font-bold uppercase border-b-2 border-black">Reporte {mesNombre} {year}</h2>
-                        <div className="flex gap-2">
-                            <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')} variant="primary">Descargar PDF</Button>
-                        </div>
+            return (
+                <div id="reporte-ministerio" className="bg-white p-6 rounded-lg shadow-lg">
+                    {/* ENCABEZADO Y ACCIONES */}
+                    <div className="flex justify-between items-center mb-8 border-b-2 pb-4 no-print">
+                        <h2 className="text-2xl font-black text-gray-800 uppercase">REPORTE MINISTERIAL: {mesNombre}</h2>
+                        <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')} variant="primary" className="shadow-blue-500/50 shadow-lg">Descargar PDF</Button>
                     </div>
-                    
-                    <div className="mb-6 p-4 bg-gray-50 border rounded no-print">
-                        <h3 className="font-bold text-sm mb-2">Control de Topes (Unidades)</h3>
-                        <div className="flex flex-wrap gap-2">
+
+                    {/* CONTROL DE TOPES - CRUCIAL */}
+                    <div className="mb-10 bg-slate-900 text-white p-5 rounded-xl shadow-inner no-print">
+                        <h3 className="text-orange-400 font-bold mb-4 flex items-center gap-2">⚠️ CONTROL DE FACTURACIÓN (TOPES)</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             {totalesArray.map(t => (
-                                <span key={t.id} className={`px-2 py-1 rounded text-xs border ${t.total > 10 ? 'bg-red-100 border-red-300 text-red-700' : 'bg-white'}`}>
-                                    {t.nombre}: <strong>{t.total}</strong>
-                                </span>
+                                <div key={t.id} className={`p-3 rounded-lg border ${t.total > 10 ? 'bg-red-500/20 border-red-500' : 'bg-slate-800 border-slate-700'}`}>
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold truncate">{t.nombre}</p>
+                                    <p className="text-xl font-black">{t.total} <span className="text-xs font-normal">u.</span></p>
+                                </div>
                             ))}
+                            {totalesArray.length === 0 && <p className="text-slate-500 text-sm italic">No hay unidades para liquidar este mes.</p>}
                         </div>
                     </div>
 
-                    <div className="space-y-8">
-                        <div>
-                            <h3 className="font-bold text-lg mb-4 border-l-4 border-black pl-2">COBERTURA DE CARGOS VACANTES</h3>
-                            {Object.keys(vacantesFinales).length === 0 ? <p className="text-gray-400 italic">No hay vacantes cubiertas.</p> : 
-                                Object.entries(vacantesFinales).map(([dia, items]) => (
-                                    <div key={dia} className="avoid-break mb-4">
-                                        <h4 className="font-bold uppercase text-xs mb-1">Pediatra de Guardia - {dia}</h4>
-                                        <TablaGrupo items={items} />
-                                    </div>
-                                ))
-                            }
-                        </div>
-                        
-                        <div>
-                            <h3 className="font-bold text-lg mb-4 border-l-4 border-purple-600 pl-2">COBERTURA DE LICENCIAS</h3>
-                            {Object.keys(licenciasFinales).length === 0 ? <p className="text-gray-400 italic">No hay licencias cubiertas.</p> : 
-                                Object.entries(licenciasFinales).map(([titular, items]) => (
-                                    <div key={titular} className="avoid-break mb-4">
-                                        <h4 className="font-bold uppercase text-xs mb-1">Reemplazo de Licencia: {titular}</h4>
-                                        <TablaGrupo items={items} />
-                                    </div>
-                                ))
-                            }
-                        </div>
+                    {/* TABLAS DE REPORTE */}
+                    <div className="space-y-12">
+                        <section>
+                            <h3 className="text-xl font-black mb-6 bg-blue-600 text-white px-4 py-2 rounded-r-full inline-block">1. COBERTURA DE CARGOS VACANTES</h3>
+                            {ordenDias.map(dia => vacantesFinales[dia] && (
+                                <div key={dia} className="mb-8 avoid-break">
+                                    <h4 className="font-bold text-sm text-blue-800 mb-2 uppercase tracking-widest border-b">Pediatra de Guardia - {dia}</h4>
+                                    <TablaEstilo items={vacantesFinales[dia]} />
+                                </div>
+                            ))}
+                        </section>
+
+                        <section>
+                            <h3 className="text-xl font-black mb-6 bg-purple-600 text-white px-4 py-2 rounded-r-full inline-block">2. COBERTURA DE LICENCIAS</h3>
+                            {Object.entries(licenciasFinales).map(([titular, items]) => (
+                                <div key={titular} className="mb-8 avoid-break">
+                                    <h4 className="font-bold text-sm text-purple-800 mb-2 uppercase tracking-widest border-b">Reemplazo: {titular}</h4>
+                                    <TablaEstilo items={items} />
+                                </div>
+                            ))}
+                        </section>
                     </div>
-                </div> 
+                </div>
             );
         }
+
+        const TablaEstilo = ({ items }) => (
+            <table className="w-full border-collapse border-2 border-gray-800 text-sm">
+                <thead>
+                    <tr className="bg-gray-100 text-[10px] font-bold uppercase">
+                        <th className="border-2 border-gray-800 p-2 w-24">Fecha</th>
+                        <th className="border-2 border-gray-800 p-2">12h Sem</th>
+                        <th className="border-2 border-gray-800 p-2">24h Sem</th>
+                        <th className="border-2 border-gray-800 p-2 bg-blue-50">12h SAD</th>
+                        <th className="border-2 border-gray-800 p-2 bg-blue-50">24h SAD</th>
+                        <th className="border-2 border-gray-800 p-2 text-left px-4">Percibe Haberes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {items.map((it, i) => (
+                        <tr key={i} className="font-bold">
+                            <td className="border-2 border-gray-800 p-2 text-center">{it.fecha}</td>
+                            <td className="border-2 border-gray-800 p-2 text-center">{!it.sadofe && !it.es24 ? 'X' : ''}</td>
+                            <td className="border-2 border-gray-800 p-2 text-center">{!it.sadofe && it.es24 ? 'X' : ''}</td>
+                            <td className="border-2 border-gray-800 p-2 text-center bg-blue-50/30">{it.sadofe && !it.es24 ? 'X' : ''}</td>
+                            <td className="border-2 border-gray-800 p-2 text-center bg-blue-50/30">{it.sadofe && it.es24 ? 'X' : ''}</td>
+                            <td className="border-2 border-gray-800 p-2 px-4 text-blue-700">{it.receptor}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        );
 
         function VistaConfiguracion() {
             return (
