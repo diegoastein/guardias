@@ -1333,43 +1333,45 @@
             const { month, year } = getDaysInMonth(currentDate); 
             const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
             
-            // Objetos para acumular datos procesados
             const vacantesPorDia = {}; 
             const licenciasPorMedico = {}; 
-            const unidadesPorMedico = {}; // Objeto limpio para el control de topes
+            const unidadesPorMedico = {}; 
 
             const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
             const esSadofe = (fechaObj) => [0, 6].includes(fechaObj.getDay());
 
-            // 1. PROCESAMIENTO DINÁMICO
+            // 1. PROCESAMIENTO FORZADO
             for (let d = 1; d <= 31; d++) {
                 const fechaObj = new Date(year, month, d); 
                 if (fechaObj.getMonth() !== month) break;
                 
-                // Formato manual YYYY-MM-DD para match perfecto con Licencias
+                // Formato YYYY-MM-DD
                 const fStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const diaIdx = fechaObj.getDay(); 
-                const nombreDia = diasSemanaNombres[diaIdx];
-                
                 const g = guardias[fStr]; 
-                const p = plantilla[diaIdx]; 
+                const p = plantilla[fechaObj.getDay()]; 
                 if (!g) continue;
 
                 ['dia1', 'dia2', 'noche1', 'noche2'].forEach(slotKey => {
                     const actual = g[slotKey];
                     const temp = p ? p[slotKey] : null;
 
-                    // FILTRO: Solo cubiertas por sistema (Ignora Arreglos Personales)
+                    // Filtro: Solo sistema y cubierta
                     if (actual && actual.estado === 'CUBIERTA' && actual.medicoId && actual.tipoPago === 'SISTEMA') {
                         const hizoId = String(actual.medicoId);
                         const cobraId = actual.prestadorId ? String(actual.prestadorId) : hizoId;
                         const titularId = temp?.medicoId ? String(temp.medicoId) : null;
 
-                        // BUSCAR LICENCIA ACTIVA PARA EL TITULAR
-                        const licActiva = titularId ? licencias.find(l => 
-                            String(l.medicoId) === titularId && fStr >= l.desde && fStr <= l.hasta
-                        ) : null;
+                        // BUSQUEDA DE LICENCIA (Doble check: ID o Nombre para evitar errores de vinculación)
+                        let licActiva = null;
+                        if (titularId) {
+                            const titularObj = medicos.find(m => String(m.id) === titularId);
+                            licActiva = licencias.find(l => {
+                                const coincideId = String(l.medicoId) === titularId;
+                                const coincideNombre = titularObj && medicos.find(m => String(m.id) === String(l.medicoId))?.nombre === titularObj.nombre;
+                                return (coincideId || coincideNombre) && fStr >= l.desde && fStr <= l.hasta;
+                            });
+                        }
 
                         const receptor = medicos.find(m => String(m.id) === cobraId);
                         if (!receptor) return;
@@ -1382,15 +1384,16 @@
                             diaRaw: d 
                         };
 
-                        // A) ES COBERTURA DE LICENCIA (Titular tiene licencia y lo hace otro)
+                        // LÓGICA DE ASIGNACIÓN AL REPORTE
                         if (licActiva && hizoId !== titularId) {
-                            const titularNom = medicos.find(m => String(m.id) === titularId)?.nombre || 'Titular';
+                            const titularObj = medicos.find(m => String(m.id) === String(licActiva.medicoId));
+                            const titularNom = titularObj ? titularObj.nombre : "Titular";
                             const grupo = `${titularNom} (${licActiva.motivo})`;
+                            
                             if (!licenciasPorMedico[grupo]) licenciasPorMedico[grupo] = [];
                             licenciasPorMedico[grupo].push(item);
-                        } 
-                        // B) ES VACANTE (Sin titular en plantilla)
-                        else if (!titularId) {
+                        } else if (!titularId) {
+                            const nombreDia = diasSemanaNombres[fechaObj.getDay()];
                             if (!vacantesPorDia[nombreDia]) vacantesPorDia[nombreDia] = [];
                             vacantesPorDia[nombreDia].push(item);
                         }
@@ -1398,23 +1401,20 @@
                 });
             }
 
-            // 2. CONSOLIDACIÓN DE 24HS Y CÁLCULO DE TOPES
-            const agruparYContar = (datos) => {
+            // 2. CONSOLIDACIÓN Y CONTEO (Sincroniza tablas con el cuadro de topes)
+            const procesarFinal = (datos) => {
                 const final = {};
                 Object.entries(datos).forEach(([key, lista]) => {
                     const mapa = new Map();
                     lista.forEach(it => {
                         const idUnico = `${it.fecha}-${it.receptorId}`;
-                        if (mapa.has(idUnico)) {
-                            mapa.get(idUnico).es24 = true;
-                        } else {
-                            mapa.set(idUnico, { ...it, es24: false });
-                        }
+                        if (mapa.has(idUnico)) { mapa.get(idUnico).es24 = true; } 
+                        else { mapa.set(idUnico, { ...it, es24: false }); }
                     });
                     const listaFinal = Array.from(mapa.values()).sort((a,b) => a.diaRaw - b.diaRaw);
                     final[key] = listaFinal;
                     
-                    // Sumar al objeto de unidades (12hs = 1u, 24hs = 2u)
+                    // Actualizar Unidades para Topes
                     listaFinal.forEach(it => {
                         unidadesPorMedico[it.receptorId] = (unidadesPorMedico[it.receptorId] || 0) + (it.es24 ? 2 : 1);
                     });
@@ -1422,37 +1422,36 @@
                 return final;
             };
 
-            const vacFinal = agruparYContar(vacantesPorDia);
-            const licFinal = agruparYContar(licenciasPorMedico);
+            const vacFinal = procesarFinal(vacantesPorDia);
+            const licFinal = procesarFinal(licenciasPorMedico);
 
-            // Preparar array para el cuadro de topes
             const totales = Object.entries(unidadesPorMedico).map(([id, cant]) => ({
                 nombre: medicos.find(m => String(m.id) === id)?.nombre || '?',
                 total: cant
             })).sort((a,b) => b.total - a.total);
 
-            // 3. RENDERIZADO
+            // 3. RENDER (Tablas Originales)
             const TablaOriginal = ({ items }) => (
                 <table className="w-full text-sm border-collapse border-2 border-gray-400 bg-white mb-6">
                     <thead className="bg-gray-200">
-                        <tr className="text-[10px] uppercase">
+                        <tr className="text-[10px] uppercase font-bold">
                             <th className="border border-gray-400 p-1">Fecha</th>
                             <th className="border border-gray-400 p-1">12 hs Sem</th>
                             <th className="border border-gray-400 p-1">24 hs Sem</th>
-                            <th className="border border-gray-400 p-1 bg-blue-50">12 hs SAD</th>
-                            <th className="border border-gray-400 p-1 bg-blue-50">24 hs SAD</th>
-                            <th className="border border-gray-400 p-1">Recibo de Cobro</th>
+                            <th className="border border-gray-400 p-1 bg-blue-100">12 hs SAD</th>
+                            <th className="border border-gray-400 p-1 bg-blue-100">24 hs SAD</th>
+                            <th className="border border-gray-400 p-1 text-center">Médico Receptor</th>
                         </tr>
                     </thead>
                     <tbody>
                         {items.map((it, i) => (
-                            <tr key={i} className="border-b text-xs">
-                                <td className="border border-gray-400 p-1 text-center">{it.fecha}</td>
+                            <tr key={i} className="border-b text-xs font-bold">
+                                <td className="border border-gray-400 p-1 text-center font-normal">{it.fecha}</td>
                                 <td className="border border-gray-400 p-1 text-center bg-gray-50">{!it.sadofe && !it.es24 ? 'X' : ''}</td>
                                 <td className="border border-gray-400 p-1 text-center bg-gray-50">{!it.sadofe && it.es24 ? 'X' : ''}</td>
                                 <td className="border border-gray-400 p-1 text-center bg-blue-50">{it.sadofe && !it.es24 ? 'X' : ''}</td>
                                 <td className="border border-gray-400 p-1 text-center bg-blue-50">{it.sadofe && it.es24 ? 'X' : ''}</td>
-                                <td className="border border-gray-400 p-1 font-bold text-blue-700 text-center uppercase">{it.receptor}</td>
+                                <td className="border border-gray-400 p-1 text-blue-800 text-center uppercase">{it.receptor}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -1462,40 +1461,47 @@
             return (
                 <div id="reporte-ministerio" className="bg-white p-4">
                     <div className="flex justify-between items-center mb-6 no-print">
-                        <h2 className="text-xl font-bold uppercase border-b-2 border-black">Guardias Pediatría - {mesNombre}</h2>
+                        <h2 className="text-xl font-bold uppercase border-b-4 border-blue-600 pb-1">Gestión Ministerial - {mesNombre}</h2>
                         <Button onClick={() => handleExportAction('reporte-ministerio', `Reporte_${mesNombre}`, 'download')}>Descargar PDF</Button>
                     </div>
 
-                    {/* CONTROL DE TOPES (Sincronizado con las tablas) */}
-                    <div className="mb-8 p-4 bg-gray-100 border-2 border-gray-300 rounded no-print">
-                        <h3 className="font-bold text-lg mb-3">Control de Topes (Liquidación)</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {/* CONTROL DE TOPES: Lee directamente lo procesado arriba */}
+                    <div className="mb-8 p-4 bg-gray-900 text-white rounded shadow-xl no-print">
+                        <h3 className="text-blue-400 font-bold text-sm mb-3 uppercase tracking-tighter">Unidades a Liquidar (Control de Topes)</h3>
+                        <div className="flex flex-wrap gap-3">
                             {totales.map((t, i) => (
-                                <div key={i} className={`p-2 border rounded ${t.total > 10 ? 'bg-red-600 text-white' : 'bg-white'}`}>
-                                    <p className="text-[10px] font-bold truncate uppercase">{t.nombre}</p>
-                                    <p className="text-xl font-black">{t.total} <span className="text-xs font-normal">u.</span></p>
+                                <div key={i} className={`px-3 py-2 rounded border ${t.total > 10 ? 'bg-red-600 border-red-400' : 'bg-gray-800 border-gray-700'}`}>
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase truncate">{t.nombre}</p>
+                                    <p className="text-lg font-black">{t.total} <span className="text-xs font-normal">u.</span></p>
                                 </div>
                             ))}
+                            {totales.length === 0 && <p className="text-gray-500 italic text-sm">No hay reemplazos detectados en el calendario.</p>}
                         </div>
                     </div>
 
-                    <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase underline">Guardias Pediatría - {mesNombre}</h2></div>
+                    <div className="print-title hidden text-center mb-8"><h2 className="text-2xl font-bold uppercase underline">Resumen de Guardias - {mesNombre}</h2></div>
 
-                    <h3 className="font-bold text-lg mb-4 uppercase">Cobertura de Cargos Vacantes</h3>
-                    {ordenDias.map(dia => vacFinal[dia] && (
-                        <div key={dia} className="avoid-break">
-                            <h4 className="font-bold text-xs mb-1 uppercase text-gray-600 border-b">Cargo Vacante: {dia}</h4>
-                            <TablaOriginal items={vacFinal[dia]} />
-                        </div>
-                    ))}
+                    <div className="space-y-12">
+                        <section>
+                            <h3 className="font-black text-lg mb-4 uppercase border-l-8 border-gray-800 pl-3 bg-gray-100 py-1">Cobertura de Cargos Vacantes</h3>
+                            {ordenDias.map(dia => vacFinal[dia] && (
+                                <div key={dia} className="avoid-break mb-6">
+                                    <h4 className="font-bold text-xs mb-1 text-gray-500 uppercase">Día: {dia}</h4>
+                                    <TablaOriginal items={vacFinal[dia]} />
+                                </div>
+                            ))}
+                        </section>
 
-                    <h3 className="font-bold text-lg mt-10 mb-4 uppercase">Cobertura de Licencias</h3>
-                    {Object.entries(licFinal).map(([titular, items]) => (
-                        <div key={titular} className="avoid-break">
-                            <h4 className="font-bold text-xs mb-1 uppercase text-purple-700 border-b">Reemplazo Licencia: {titular}</h4>
-                            <TablaOriginal items={items} />
-                        </div>
-                    ))}
+                        <section>
+                            <h3 className="font-black text-lg mb-4 uppercase border-l-8 border-blue-600 pl-3 bg-blue-50 py-1">Cobertura de Licencias</h3>
+                            {Object.entries(licFinal).map(([titular, items]) => (
+                                <div key={titular} className="avoid-break mb-6">
+                                    <h4 className="font-bold text-xs mb-1 text-blue-600 uppercase">Titular con Licencia: {titular}</h4>
+                                    <TablaOriginal items={items} />
+                                </div>
+                            ))}
+                        </section>
+                    </div>
                 </div>
             );
         }
