@@ -198,6 +198,9 @@
         const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, month, year }; };
         const formatDate = (d, m, y) => `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`;
         const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
+        const toLocalDateStr = (year, month, day) =>
+  `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
         const obtenerDetalleLicencia = (medicoId, fechaStr) =>
   licencias.find(
@@ -289,7 +292,7 @@
                 for (let d = 1; d <= days; d++) {
                     const fObj = new Date(year, month, d);
                     const tDay = plantilla[fObj.getDay()];
-                    if (tDay) nuevas[fObj.toISOString().split('T')[0].slice(0, 10)] = tDay; // Usar slice(0, 10) para asegurar formato YYYY-MM-DD
+                    if (tDay) nuevas[toLocalDateStr(year, month, d)] = tDay; // Usar slice(0, 10) para asegurar formato YYYY-MM-DD
                 }
                 dbBatchGuardias(nuevas);
             };
