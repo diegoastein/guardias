@@ -199,7 +199,14 @@
         const formatDate = (d, m, y) => `${d.toString().padStart(2, '0')}/${(m + 1).toString().padStart(2, '0')}/${y}`;
         const formatDateISO = (dateStr) => { if(!dateStr) return ''; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
         const estaDeLicencia = (medicoId, fechaStr) => licencias.some(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && fechaStr <= lic.hasta);
-        const obtenerDetalleLicencia = (medicoId, fechaStr) => licencias.find(lic => String(lic.medicoId) === String(medicoId) && fechaStr >= lic.desde && lic.hasta);
+        const obtenerDetalleLicencia = (medicoId, fechaStr) =>
+  licencias.find(
+    lic =>
+      String(lic.medicoId) === String(medicoId) &&
+      fechaStr >= lic.desde &&
+      fechaStr <= lic.hasta
+  );
+
         
         // --- MOTOR PDF + SHARE ---
         const handleExportAction = (elementId, filename, action = 'download') => {
