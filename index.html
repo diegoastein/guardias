@@ -767,7 +767,29 @@ const fStrAtras = toLocalDateStr(
         }
 
         function VistaBusqueda() { 
-             const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
+            if (mode === 'historialLicencias') {
+  if (!medicoId) return alert("Seleccione un médico");
+
+  const medico = medicos.find(m => String(m.id) === String(medicoId));
+  const nombre = medico ? medico.nombre : 'Médico';
+
+  const results = licencias
+    .filter(lic => String(lic.medicoId) === String(medicoId))
+    .sort((a, b) => a.desde.localeCompare(b.desde))
+    .map(lic => ({
+      motivo: lic.motivo,
+      desde: formatDateISO(lic.desde),
+      hasta: formatDateISO(lic.hasta),
+      detalle: lic.detalleCobertura || '',
+      coberturas: [] // preparado para PASO 3
+    }));
+
+  setTituloReporte(`Historial de Licencias – ${nombre}`);
+  setResultados(results);
+  return;
+}
+ 
+            const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
              const [tituloReporte, setTituloReporte] = useState(''); 
              const [editingLicenciaId, setEditingLicenciaId] = useState(null); const [editLicenciaForm, setEditLicenciaForm] = useState({});
              // NUEVO ESTADO para modo derivadas
@@ -1082,6 +1104,17 @@ const fStrAtras = toLocalDateStr(
                         <button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button>
                         <button onClick={() => {setMode('derivadas'); setResultados(null)}} className={`p-2 rounded border ${mode==='derivadas'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Derivadas (No Cobradas)</button>
                         <button onClick={() => {setMode('masivo'); setResultados(null)}} className={`p-2 rounded border font-bold text-indigo-700 ${mode==='masivo'?'bg-indigo-100 border-indigo-500':'bg-gray-50'}`}>📄 Reportes Masivos</button>
+                        <button
+  onClick={() => { setMode('historialLicencias'); setResultados(null); }}
+  className={`p-2 rounded border ${
+    mode === 'historialLicencias'
+      ? 'bg-blue-100 border-blue-500'
+      : 'bg-gray-50'
+  }`}
+>
+  Historial Licencias
+</button>
+
                     </div>
 
                     {/* CAMPOS DE FILTRO */}
@@ -1105,6 +1138,22 @@ const fStrAtras = toLocalDateStr(
                             </div>
                         )}
                         <Button onClick={buscar}>Buscar</Button>
+                        {mode === 'historialLicencias' && (
+  <div>
+    <label className="text-xs font-bold text-gray-500">Médico</label>
+    <select
+      className="w-full p-2 border rounded"
+      value={medicoId}
+      onChange={e => setMedicoId(e.target.value)}
+    >
+      <option value="">Seleccione...</option>
+      {medicosOrdenados.map(m => (
+        <option key={m.id} value={m.id}>{m.nombre}</option>
+      ))}
+    </select>
+  </div>
+)}
+
                     </div>
 
                     {/* MODO MASIVO */}
@@ -1182,6 +1231,15 @@ const fStrAtras = toLocalDateStr(
                     <div className="w-scroll-container">
                         <table className="w-full text-sm border-collapse border">
                             <thead className="bg-white">
+                                {mode === 'historialLicencias' && (
+  <tr>
+    <th className="border p-2">Motivo</th>
+    <th className="border p-2">Desde</th>
+    <th className="border p-2">Hasta</th>
+    <th className="border p-2">Detalle</th>
+  </tr>
+)}
+
                                 {mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}
                                 {mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th><th className="border p-2">Acciones</th></tr>}
                                 {mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}
@@ -1227,6 +1285,15 @@ const fStrAtras = toLocalDateStr(
                                             <td className="border p-2 font-medium">{r.hizo}</td>
                                             <td className="border p-2 font-bold text-red-600">{r.recibo}</td>
                                             <td className="border p-2 text-xs">{r.tipo}</td>
+                                            {mode === 'historialLicencias' && (
+  <>
+    <td className="border p-2">{r.motivo}</td>
+    <td className="border p-2">{r.desde}</td>
+    <td className="border p-2">{r.hasta}</td>
+    <td className="border p-2 text-xs">{r.detalle}</td>
+  </>
+)}
+
                                         </>
                                     )}
                                 </tr>
