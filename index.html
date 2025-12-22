@@ -767,22 +767,7 @@ const fStrAtras = toLocalDateStr(
         }
 
         function VistaBusqueda() { 
-            if (mode === 'historialLicencias') {
-  if (!medicoId) return alert("Seleccione un médico");
-
-  const medico = medicos.find(m => String(m.id) === String(medicoId));
-  const nombre = medico ? medico.nombre : 'Médico';
-
-  const results = licencias
-    .filter(lic => String(lic.medicoId) === String(medicoId))
-    .sort((a, b) => a.desde.localeCompare(b.desde))
-    .map(lic => ({
-      motivo: lic.motivo,
-      desde: formatDateISO(lic.desde),
-      hasta: formatDateISO(lic.hasta),
-      detalle: lic.detalleCobertura || '',
-      coberturas: [] // preparado para PASO 3
-    }));
+           
 
   setTituloReporte(`Historial de Licencias – ${nombre}`);
   setResultados(results);
@@ -807,6 +792,28 @@ const fStrAtras = toLocalDateStr(
              const saveEditLicencia = async () => { await dbAgregarLicencia(editLicenciaForm); setEditingLicenciaId(null); const updated = resultados.map(r => r.id === editLicenciaForm.id ? { ...editLicenciaForm, medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre } : r); setResultados(updated); };
              
              const buscar = () => {
+                if (mode === 'historialLicencias') {
+  if (!medicoId) return alert("Seleccione un médico");
+
+  const medico = medicos.find(m => String(m.id) === String(medicoId));
+  const nombre = medico ? medico.nombre : 'Médico';
+
+  const results = licencias
+    .filter(lic => String(lic.medicoId) === String(medicoId))
+    .sort((a, b) => a.desde.localeCompare(b.desde))
+    .map(lic => ({
+      motivo: lic.motivo,
+      desde: formatDateISO(lic.desde),
+      hasta: formatDateISO(lic.hasta),
+      detalle: lic.detalleCobertura || '',
+      coberturas: []
+    }));
+
+  setTituloReporte(`Historial de Licencias – ${nombre}`);
+  setResultados(results);
+  return;
+}
+
                 if(mode !== 'derivadas' && mode !== 'masivo' && (!fechaDesde || !fechaHasta)) return alert("Seleccione fechas");
 
                 let titulo = `Reporte`;
