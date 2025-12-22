@@ -364,7 +364,8 @@ const fStrAtras = toLocalDateStr(
             };
             
             const renderCell = (day) => {
-                const fStr = new Date(year, month, day).toISOString().split('T')[0].slice(0, 10);
+                const fStr = toLocalDateStr(year, month, day);
+
                 const g = guardias[fStr];
 
                 // Obtener datos de plantilla para este día
