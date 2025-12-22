@@ -302,10 +302,16 @@
                 let count = 0;
                 for (let d = 1; d <= days; d++) {
                     const hoy = new Date(year, month, d);
-                    const fStrHoy = hoy.toISOString().split('T')[0].slice(0, 10);
+                   
                     if (guardias[fStrHoy]) continue; 
                     const atras = new Date(year, month, d - 7);
-                    const fStrAtras = atras.toISOString().split('T')[0].slice(0, 10);
+                    const fStrHoy = toLocalDateStr(year, month, d);
+const fStrAtras = toLocalDateStr(
+  atras.getFullYear(),
+  atras.getMonth(),
+  atras.getDate()
+);
+
                     const gAtras = guardias[fStrAtras];
                     if(gAtras) { nuevas[fStrHoy] = gAtras; count++; }
                 }
