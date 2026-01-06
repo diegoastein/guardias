@@ -287,16 +287,7 @@
             const today = new Date();
             const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
 
-            const aplicarPlantilla = () => {
-                if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
-                const nuevas = {};
-                for (let d = 1; d <= days; d++) {
-                    const fObj = new Date(year, month, d);
-                    const tDay = plantilla[fObj.getDay()];
-                    if (tDay) nuevas[toLocalDateStr(year, month, d)] = tDay; // Usar slice(0, 10) para asegurar formato YYYY-MM-DD
-                }
-                dbBatchGuardias(nuevas);
-            };
+            
             const repetirSemanaAnterior = () => {
                 if (!confirm("¿Rellenar huecos con semana anterior?")) return;
                 const nuevas = {};
