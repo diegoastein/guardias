@@ -294,7 +294,28 @@ const unsubPagos = onSnapshot(collection(db, 'pagos_confirmados'), (snap) => {
             const firstDayVisual = (firstDay + 6) % 7;
             const today = new Date();
             const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
-
+            const aplicarPlantilla = () => {
+                if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
+                const nuevas = {};
+                for (let d = 1; d <= days; d++) {
+                    const fObj = new Date(year, month, d);
+                    const dayOfWeek = fObj.getDay();
+                    const tDay = plantilla[dayOfWeek];
+                    if (tDay) {
+                        const dataConTitulares = { ...tDay };
+                        // Guardamos titulares originales para el Control de Pagos
+                        if (dataConTitulares.dia1) dataConTitulares.dia1.titularOriginalId = dataConTitulares.dia1.medicoId;
+                        if (dataConTitulares.dia2) dataConTitulares.dia2.titularOriginalId = dataConTitulares.dia2.medicoId;
+                        if (dataConTitulares.noche1) dataConTitulares.noche1.titularOriginalId = dataConTitulares.noche1.medicoId;
+                        if (dataConTitulares.noche2) dataConTitulares.noche2.titularOriginalId = dataConTitulares.noche2.medicoId;
+                        
+                        dataConTitulares.titularesOriginales = { ...tDay };
+                        nuevas[toLocalDateStr(year, month, d)] = dataConTitulares;
+                    }
+                }
+                dbBatchGuardias(nuevas);
+            };
+            // --- HASTA AQUÍ ---
             
             const repetirSemanaAnterior = () => {
                 if (!confirm("¿Rellenar huecos con semana anterior?")) return;
