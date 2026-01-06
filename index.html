@@ -385,7 +385,11 @@ const fStrAtras = toLocalDateStr(
                     let titleText = m ? m.nombre : '?';
                     
                     // Lógica de Clasificación de Cobertura
-                    const titularId = slot.template?.medicoId;
+                    // Intentamos usar el titular guardado en la guardia (histórico), 
+// si no existe (guardias viejas), usamos la plantilla actual como respaldo.
+const titularId = slot.data?.titularOriginalId || 
+                  (g?.titularesOriginales && g.titularesOriginales[slot.type + (index % 2 + 1)]?.medicoId) || 
+                  slot.template?.medicoId;
                     const isVacanteOriginal = !titularId;
                     
                     // Determinar si el titular está en licencia (o si el slot tiene estado LICENCIA_SIAPE)
