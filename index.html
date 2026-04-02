@@ -1409,8 +1409,10 @@
             return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><div className="flex gap-2"><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'download')} variant="primary" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : 'Descargar PDF'}</Button></div></div><div className="grid-responsive-fill">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
         }
 
-        function VistaReporte() { 
-            const { month, year } = getDaysInMonth(currentDate); const mesNombre = currentDate.toLocaleString('es-ES', { month: 'long' });
+        function VistaReporte() {
+            const [reportDate, setReportDate] = useState(currentDate);
+            const { month, year } = getDaysInMonth(reportDate);
+            const mesNombre = reportDate.toLocaleString('es-ES', { month: 'long' });
             const vacantesPorDia = {}; const licenciasPorMedico = {}; const ordenDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const esSadofe = (fechaObj) => { const day = fechaObj.getDay(); return day === 0 || day === 6; };
             for (let d = 1; d <= 31; d++) {
@@ -1479,10 +1481,18 @@
                     {/* Contenido que debe ocupar todo el ancho */}
                     <div className="min-w-[1000px] w-full">
                         <div className="flex justify-between items-center mb-8 no-print">
-                            <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría - {mesNombre} {year}</h2>
+                            <div className="flex items-center gap-4">
+                                <h2 className="text-2xl font-bold uppercase border-b-2 border-black inline-block pb-1">Guardias de Pediatría</h2>
+                                <input
+                                    type="month"
+                                    className="border rounded px-3 py-1 text-gray-800 font-medium"
+                                    value={`${year}-${String(month + 1).padStart(2, '0')}`}
+                                    onChange={e => { const [y, m] = e.target.value.split('-').map(Number); setReportDate(new Date(y, m - 1, 1)); }}
+                                />
+                            </div>
                             <div className="flex gap-2">
-                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
-                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}_${year}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}_${year}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
                             </div>
                         </div>
                         
