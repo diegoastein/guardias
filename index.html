@@ -147,6 +147,7 @@
         const [licencias, setLicencias] = useState([]);
         const [guardias, setGuardias] = useState({});
         const [plantilla, setPlantilla] = useState({});
+        const [notas, setNotas] = useState({});
 
         // --- TOAST ---
         const [toast, setToast] = useState(null);
@@ -187,7 +188,8 @@
             const unsubLicencias = onSnapshot(collection(db, 'licencias'), (snap) => setLicencias(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
             const unsubGuardias = onSnapshot(collection(db, 'guardias'), (snap) => { const d = {}; snap.docs.forEach(x => d[x.id] = x.data()); setGuardias(d); });
             const unsubPlantilla = onSnapshot(collection(db, 'plantilla'), (snap) => { const d = {}; snap.docs.forEach(x => d[x.id] = x.data()); setPlantilla(d); });
-            return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); };
+            const unsubNotas = onSnapshot(collection(db, 'notas'), (snap) => { const d = {}; snap.docs.forEach(x => d[x.id] = x.data()); setNotas(d); });
+            return () => { unsubMedicos(); unsubLicencias(); unsubGuardias(); unsubPlantilla(); unsubNotas(); };
         }, [user]);
 
         const medicosOrdenados = useMemo(() => [...medicos].sort((a, b) => a.nombre.localeCompare(b.nombre)), [medicos]);
@@ -200,6 +202,10 @@
         const dbBorrarLicencia = async (id) => { await deleteDoc(doc(db, 'licencias', String(id))); };
         const dbGuardarGuardia = async (fechaStr, data) => { await setDoc(doc(db, 'guardias', fechaStr), data); };
         const dbGuardarPlantilla = async (diaIdx, data) => { await setDoc(doc(db, 'plantilla', diaIdx.toString()), data); };
+        const dbGuardarNota = async (fechaStr, texto) => {
+            if (!texto.trim()) { await deleteDoc(doc(db, 'notas', fechaStr)); }
+            else { await setDoc(doc(db, 'notas', fechaStr), { texto }); }
+        };
 
         const dbBatchGuardias = async (nuevasGuardias) => {
             const batch = writeBatch(db);
@@ -319,6 +325,25 @@
             const [showPlantillaModal, setShowPlantillaModal] = useState(false);
             const [plantillaTarget, setPlantillaTarget] = useState(`${year}-${String(month + 1).padStart(2, '0')}`);
 
+            const resumenMes = useMemo(() => {
+                let diasConVacante = 0;
+                const enLicenciaSet = new Set();
+                const conteo = {};
+                for (let d = 1; d <= days; d++) {
+                    const fStr = toLocalDateStr(year, month, d);
+                    licencias.forEach(lic => { if (fStr >= lic.desde && fStr <= lic.hasta) enLicenciaSet.add(lic.medicoId); });
+                    const g = guardias[fStr];
+                    if (g) {
+                        const slots = [g.dia1, g.dia2, g.noche1, g.noche2];
+                        if (slots.some(s => !s || s.estado === 'VACANTE' || !s.medicoId)) diasConVacante++;
+                        slots.forEach(s => { if (s?.estado === 'CUBIERTA' && s.medicoId) conteo[s.medicoId] = (conteo[s.medicoId] || 0) + 1; });
+                    }
+                }
+                const top = Object.entries(conteo).sort((a, b) => b[1] - a[1]).slice(0, 3)
+                    .map(([id, n]) => ({ nombre: medicos.find(m => String(m.id) === id)?.nombre?.split(',')[0] || '?', n }));
+                return { diasConVacante, enLicencia: enLicenciaSet.size, top };
+            }, [guardias, licencias, medicos, month, year, days]);
+
             const ejecutarAplicarPlantilla = async (soloVacios) => {
                 const [tYear, tMonthNum] = plantillaTarget.split('-').map(Number);
                 const tMonthIdx = tMonthNum - 1;
@@ -388,6 +413,7 @@
                 const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
                 const guardiaActual = guardias[fechaStr] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
                 const [form, setForm] = useState(guardiaActual);
+                const [notaTexto, setNotaTexto] = useState(notas[fechaStr]?.texto || '');
                 
                 const SlotForm = ({ label, slotData, onChangeSlot }) => {
                     const data = slotData || { estado: 'VACANTE', tipoPago: 'SISTEMA' };
@@ -425,7 +451,7 @@
                         </div>
                     );
                 };
-                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar Guardia del {formatDate(selectedDay, month, year)}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={async ()=>{ await dbGuardarGuardia(fechaStr, form); setSelectedDay(null); showToast('Guardia guardada.'); }}>Guardar</Button></div></div></div>);
+                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar Guardia del {formatDate(selectedDay, month, year)}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="mt-3 border-t pt-3"><label className="block text-xs font-bold text-gray-500 mb-1">Nota del día</label><textarea className="w-full border rounded p-2 text-sm resize-none" rows="2" placeholder="Feriado, aviso especial..." value={notaTexto} onChange={e => setNotaTexto(e.target.value)} /></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={async ()=>{ await dbGuardarGuardia(fechaStr, form); await dbGuardarNota(fechaStr, notaTexto); setSelectedDay(null); showToast('Guardia guardada.'); }}>Guardar</Button></div></div></div>);
             };
             
             const renderCell = (day) => {
@@ -609,6 +635,23 @@
                             <input ref={importRef} type="file" accept=".json" className="hidden" onChange={importarBackup} />
                         </div>
                     </div>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div className="bg-white rounded shadow-sm p-3 flex items-center gap-3">
+                            <div className="text-2xl font-bold text-red-500">{resumenMes.diasConVacante}</div>
+                            <div className="text-gray-500 leading-tight">días con<br/>vacantes</div>
+                        </div>
+                        <div className="bg-white rounded shadow-sm p-3 flex items-center gap-3">
+                            <div className="text-2xl font-bold text-yellow-500">{resumenMes.enLicencia}</div>
+                            <div className="text-gray-500 leading-tight">médicos en<br/>licencia</div>
+                        </div>
+                        <div className="bg-white rounded shadow-sm p-3">
+                            <div className="text-xs font-bold text-gray-400 uppercase mb-1">Más guardias</div>
+                            {resumenMes.top.length === 0 ? <span className="text-gray-400 italic text-xs">Sin datos</span> :
+                                resumenMes.top.map((t, i) => <div key={i} className="truncate text-gray-700 text-xs">{i + 1}. {t.nombre} <span className="font-bold text-blue-600">({t.n})</span></div>)
+                            }
+                        </div>
+                    </div>
+
                     <div className="w-scroll-container pb-4">
                         <div className="min-w-[1200px]">
                             <div className="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-500 mb-1">{['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d}>{d}</div>)}</div>
@@ -620,7 +663,10 @@
                                         onClick={()=>setSelectedDay(d)} 
                                         className={`h-48 border rounded bg-white relative hover:shadow cursor-pointer flex flex-col ${isToday(d) ? 'ring-4 ring-blue-500 ring-inset bg-blue-50' : ''}`}
                                     >
-                                        <div className={`text-right text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>{d}</div>
+                                        <div className={`flex justify-between items-center text-sm font-bold p-1 border-b ${isToday(d) ? 'bg-blue-200 text-blue-800' : 'bg-gray-50'}`}>
+                                            <span className="text-xs">{notas[toLocalDateStr(year, month, d)] ? '📝' : ''}</span>
+                                            <span>{d}</span>
+                                        </div>
                                         <div className="flex-1 h-full overflow-hidden">
                                             {renderCell(d)}
                                         </div>
