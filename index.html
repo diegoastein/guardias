@@ -269,7 +269,7 @@
 
             setTimeout(() => {
                 window.html2canvas(clone, {
-                    scale: 2,
+                    scale: 1.5,
                     useCORS: true,
                     backgroundColor: '#ffffff',
                     windowWidth: cloneWidth,
@@ -284,7 +284,7 @@
                     const imgWidth = pageW;
                     const imgHeight = (canvas.height * imgWidth) / canvas.width;
                     const pdf = new jsPDF(orientation, 'mm', imgHeight > pageH ? [pageW, imgHeight + 10] : (isReporte ? 'a4' : 'a4'));
-                    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+                    const imgData = canvas.toDataURL('image/jpeg', 0.85);
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
 
                     if (action === 'share') {
