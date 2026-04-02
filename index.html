@@ -277,13 +277,11 @@
                     logging: false
                 }).then((canvas) => {
                     const { jsPDF } = window.jspdf;
-                    // Reporte usa landscape, el resto portrait
-                    const orientation = isReporte ? 'l' : 'p';
-                    const pageW = isReporte ? 297 : 210;
-                    const pageH = isReporte ? 210 : 297;
+                    const pageW = 210;
+                    const pageH = 297;
                     const imgWidth = pageW;
                     const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                    const pdf = new jsPDF(orientation, 'mm', imgHeight > pageH ? [pageW, imgHeight + 10] : (isReporte ? 'a4' : 'a4'));
+                    const pdf = new jsPDF('p', 'mm', imgHeight > pageH ? [pageW, imgHeight + 10] : 'a4');
                     const imgData = canvas.toDataURL('image/jpeg', 0.85);
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
 
