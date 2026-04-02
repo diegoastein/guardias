@@ -148,6 +148,24 @@
         const [guardias, setGuardias] = useState({});
         const [plantilla, setPlantilla] = useState({});
 
+        // --- TOAST ---
+        const [toast, setToast] = useState(null);
+        const toastTimer = useRef(null);
+        const showToast = (message, type = 'success') => {
+            setToast({ message, type });
+            if (toastTimer.current) clearTimeout(toastTimer.current);
+            toastTimer.current = setTimeout(() => setToast(null), 3500);
+        };
+        const Toast = () => {
+            if (!toast) return null;
+            const colors = { success: 'bg-green-600', error: 'bg-red-600', info: 'bg-blue-500' };
+            return (
+                <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 ${colors[toast.type]} text-white px-6 py-3 rounded-lg shadow-xl z-[200] text-sm font-medium pointer-events-none`}>
+                    {toast.message}
+                </div>
+            );
+        };
+
         // --- FIREBASE LISTENERS ---
         useEffect(() => {
             const iniciar = async () => {
@@ -287,37 +305,59 @@
             const today = new Date();
             const isToday = (day) => today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
 
-            const aplicarPlantilla = () => {
-                if (!confirm(`¿Aplicar plantilla? Sobrescribirá el mes.`)) return;
+            const [showPlantillaModal, setShowPlantillaModal] = useState(false);
+            const [plantillaTarget, setPlantillaTarget] = useState(`${year}-${String(month + 1).padStart(2, '0')}`);
+
+            const ejecutarAplicarPlantilla = (soloVacios) => {
+                const [tYear, tMonthNum] = plantillaTarget.split('-').map(Number);
+                const tMonthIdx = tMonthNum - 1;
+                const diasEnMes = new Date(tYear, tMonthNum, 0).getDate();
+                const mesNombreTarget = new Date(tYear, tMonthIdx, 1).toLocaleString('es-ES', { month: 'long', year: 'numeric' });
                 const nuevas = {};
-                for (let d = 1; d <= days; d++) {
-                    const fObj = new Date(year, month, d);
-                    const tDay = plantilla[fObj.getDay()];
-                    if (tDay) nuevas[toLocalDateStr(year, month, d)] = tDay; // Usar slice(0, 10) para asegurar formato YYYY-MM-DD
+                for (let d = 1; d <= diasEnMes; d++) {
+                    const fStr = toLocalDateStr(tYear, tMonthIdx, d);
+                    if (soloVacios && guardias[fStr]) continue;
+                    const tDay = plantilla[new Date(tYear, tMonthIdx, d).getDay()];
+                    if (tDay) nuevas[fStr] = tDay;
                 }
-                dbBatchGuardias(nuevas);
+                if (Object.keys(nuevas).length === 0) { showToast(`No hay días para completar en ${mesNombreTarget}.`, 'info'); setShowPlantillaModal(false); return; }
+                const accion = soloVacios ? `rellenar ${Object.keys(nuevas).length} días vacíos` : `sobrescribir los ${Object.keys(nuevas).length} días`;
+                if (!confirm(`¿Confirmar ${accion} de ${mesNombreTarget}?`)) return;
+                await dbBatchGuardias(nuevas);
+                showToast(`Plantilla aplicada en ${mesNombreTarget}.`);
+                setShowPlantillaModal(false);
             };
+
+            const PlantillaModal = () => (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-sm space-y-4 shadow-xl">
+                        <h3 className="font-bold text-lg text-gray-800">Aplicar Plantilla</h3>
+                        <div>
+                            <label className="block text-sm text-gray-600 mb-1">Mes destino</label>
+                            <input type="month" className="border rounded px-3 py-2 w-full text-gray-800" value={plantillaTarget} onChange={e => setPlantillaTarget(e.target.value)} />
+                        </div>
+                        <div className="flex flex-col gap-2 pt-2">
+                            <Button onClick={() => ejecutarAplicarPlantilla(true)} variant="primary">Solo rellenar días vacíos</Button>
+                            <Button onClick={() => ejecutarAplicarPlantilla(false)} variant="warning">Sobrescribir todo el mes</Button>
+                            <Button onClick={() => setShowPlantillaModal(false)} variant="secondary">Cancelar</Button>
+                        </div>
+                    </div>
+                </div>
+            );
             const repetirSemanaAnterior = () => {
                 if (!confirm("¿Rellenar huecos con semana anterior?")) return;
                 const nuevas = {};
                 let count = 0;
                 for (let d = 1; d <= days; d++) {
-                    const hoy = new Date(year, month, d);
-                   
-                    if (guardias[fStrHoy]) continue; 
-                    const atras = new Date(year, month, d - 7);
                     const fStrHoy = toLocalDateStr(year, month, d);
-const fStrAtras = toLocalDateStr(
-  atras.getFullYear(),
-  atras.getMonth(),
-  atras.getDate()
-);
-
+                    if (guardias[fStrHoy]) continue;
+                    const atras = new Date(year, month, d - 7);
+                    const fStrAtras = toLocalDateStr(atras.getFullYear(), atras.getMonth(), atras.getDate());
                     const gAtras = guardias[fStrAtras];
-                    if(gAtras) { nuevas[fStrHoy] = gAtras; count++; }
+                    if (gAtras) { nuevas[fStrHoy] = gAtras; count++; }
                 }
                 dbBatchGuardias(nuevas);
-                alert(`Se completaron ${count} días.`);
+                showToast(`Se completaron ${count} días.`);
             };
             const EditGuardiaModal = () => {
                 if (!selectedDay) return null;
@@ -361,7 +401,7 @@ const fStrAtras = toLocalDateStr(
                         </div>
                     );
                 };
-                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar Guardia del {formatDate(selectedDay, month, year)}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={()=>{dbGuardarGuardia(fechaStr, form); setSelectedDay(null);}}>Guardar</Button></div></div></div>);
+                return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto"><div className="bg-white rounded p-4 w-full max-w-3xl"><h3 className="font-bold mb-4">Editar Guardia del {formatDate(selectedDay, month, year)}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-500">Día</h4><SlotForm label="M1" slotData={form.dia1} onChangeSlot={d=>setForm({...form, dia1:d})}/><SlotForm label="M2" slotData={form.dia2} onChangeSlot={d=>setForm({...form, dia2:d})}/></div><div><h4 className="font-bold text-indigo-500">Noche</h4><SlotForm label="M1" slotData={form.noche1} onChangeSlot={d=>setForm({...form, noche1:d})}/><SlotForm label="M2" slotData={form.noche2} onChangeSlot={d=>setForm({...form, noche2:d})}/></div></div><div className="flex justify-end gap-2 mt-4"><Button onClick={()=>setSelectedDay(null)} variant="secondary">Cancelar</Button><Button onClick={async ()=>{ await dbGuardarGuardia(fechaStr, form); setSelectedDay(null); showToast('Guardia guardada.'); }}>Guardar</Button></div></div></div>);
             };
             
             const renderCell = (day) => {
@@ -487,6 +527,47 @@ const fStrAtras = toLocalDateStr(
                 </Card>
             );
 
+            const importRef = useRef(null);
+
+            const exportarBackup = () => {
+                const backup = {
+                    version: 1,
+                    fecha: new Date().toISOString(),
+                    guardias,
+                    medicos,
+                    licencias,
+                    plantilla
+                };
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `guardias_backup_${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Backup exportado correctamente.');
+            };
+
+            const importarBackup = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        if (!data.guardias) { showToast('Archivo inválido: no contiene guardias.', 'error'); return; }
+                        const totalGuardias = Object.keys(data.guardias).length;
+                        if (!confirm(`¿Restaurar backup del ${data.fecha ? data.fecha.slice(0,10) : 'fecha desconocida'}?\nSe importarán ${totalGuardias} días de guardias. Los datos actuales NO se borran, solo se sobreescriben los días incluidos en el backup.`)) return;
+                        await dbBatchGuardias(data.guardias);
+                        showToast(`Backup restaurado: ${totalGuardias} días importados.`);
+                    } catch(err) {
+                        showToast('Error al leer el archivo: ' + err.message, 'error');
+                    }
+                    e.target.value = '';
+                };
+                reader.readAsText(file);
+            };
+
             return (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center bg-white p-3 rounded shadow-sm">
@@ -496,7 +577,13 @@ const fStrAtras = toLocalDateStr(
                             <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><ChevronRight/></button>
                             <Button onClick={() => setCurrentDate(new Date())} variant="secondary" className="ml-4 text-sm">Hoy</Button>
                         </div>
-                        <div className="flex gap-2"><Button onClick={aplicarPlantilla}>Plantilla</Button><Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button></div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => { setPlantillaTarget(`${year}-${String(month + 1).padStart(2, '0')}`); setShowPlantillaModal(true); }}>Plantilla</Button>
+                            <Button onClick={repetirSemanaAnterior}>Repetir Sem.</Button>
+                            <Button onClick={exportarBackup} variant="secondary" title="Exportar backup completo"><Download/></Button>
+                            <Button onClick={() => importRef.current.click()} variant="secondary" title="Importar backup"><Upload/></Button>
+                            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={importarBackup} />
+                        </div>
                     </div>
                     <div className="w-scroll-container pb-4">
                         <div className="min-w-[1200px]">
@@ -521,6 +608,7 @@ const fStrAtras = toLocalDateStr(
                     {/* Nueva Leyenda de Colores */}
                     <ColorLegend />
                     {selectedDay && <EditGuardiaModal />}
+                    {showPlantillaModal && <PlantillaModal />}
                 </div>
             );
         }
@@ -1497,6 +1585,7 @@ const fStrAtras = toLocalDateStr(
                 <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     {!user ? <div className="text-center p-10">Conectando con base de datos segura...</div> : renderView()}
                 </main>
+                <Toast />
             </div>
         );
     }
