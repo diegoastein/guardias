@@ -258,9 +258,11 @@
 
             if (isPlantilla) {
                 const grid = clone.querySelector('.grid-responsive-fill');
-                if(grid) { grid.style.display = 'block'; grid.style.gap = '0'; }
+                if(grid) { grid.style.display = 'grid'; grid.style.gridTemplateColumns = 'repeat(2, 1fr)'; grid.style.gap = '12px'; }
                 const cards = clone.querySelectorAll('.relative.border');
-                cards.forEach(c => { c.style.marginBottom = '20px'; c.style.border = '1px solid #ccc'; c.style.pageBreakInside = 'avoid'; });
+                cards.forEach(c => { c.style.border = '1px solid #ccc'; c.style.pageBreakInside = 'avoid'; });
+                // Evitar que los nombres se corten con puntos suspensivos
+                clone.querySelectorAll('.truncate').forEach(el => { el.style.overflow = 'visible'; el.style.whiteSpace = 'normal'; el.style.textOverflow = 'unset'; });
             }
 
             clone.style.position = "absolute"; clone.style.top = "-9999px"; clone.style.left = "0";
@@ -328,21 +330,28 @@
             const resumenMes = useMemo(() => {
                 let diasConVacante = 0;
                 const enLicenciaSet = new Set();
-                const conteo = {};
+                const conteoExtras = {};
+                const slotKeys = ['dia1', 'dia2', 'noche1', 'noche2'];
                 for (let d = 1; d <= days; d++) {
                     const fStr = toLocalDateStr(year, month, d);
                     licencias.forEach(lic => { if (fStr >= lic.desde && fStr <= lic.hasta) enLicenciaSet.add(lic.medicoId); });
                     const g = guardias[fStr];
                     if (g) {
-                        const slots = [g.dia1, g.dia2, g.noche1, g.noche2];
-                        if (slots.some(s => !s || s.estado === 'VACANTE' || !s.medicoId)) diasConVacante++;
-                        slots.forEach(s => { if (s?.estado === 'CUBIERTA' && s.medicoId) conteo[s.medicoId] = (conteo[s.medicoId] || 0) + 1; });
+                        const p = plantilla[new Date(year, month, d).getDay()];
+                        if (slotKeys.some(k => !g[k] || g[k].estado === 'VACANTE' || !g[k].medicoId)) diasConVacante++;
+                        slotKeys.forEach(k => {
+                            const s = g[k];
+                            if (!s || s.estado !== 'CUBIERTA' || !s.medicoId || s.tipoPago === 'PERSONAL') return;
+                            const titularId = p?.[k]?.medicoId;
+                            const esExtra = !titularId || String(titularId) !== String(s.medicoId);
+                            if (esExtra) conteoExtras[s.medicoId] = (conteoExtras[s.medicoId] || 0) + 1;
+                        });
                     }
                 }
-                const top = Object.entries(conteo).sort((a, b) => b[1] - a[1]).slice(0, 3)
+                const top = Object.entries(conteoExtras).sort((a, b) => b[1] - a[1]).slice(0, 3)
                     .map(([id, n]) => ({ nombre: medicos.find(m => String(m.id) === id)?.nombre?.split(',')[0] || '?', n }));
                 return { diasConVacante, enLicencia: enLicenciaSet.size, top };
-            }, [guardias, licencias, medicos, month, year, days]);
+            }, [guardias, licencias, medicos, plantilla, month, year, days]);
 
             const ejecutarAplicarPlantilla = async (soloVacios) => {
                 const [tYear, tMonthNum] = plantillaTarget.split('-').map(Number);
