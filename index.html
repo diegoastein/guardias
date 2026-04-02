@@ -232,48 +232,61 @@
         
         // --- MOTOR PDF + SHARE ---
         const handleExportAction = (elementId, filename, action = 'download') => {
-            const input = document.getElementById(elementId); 
+            const input = document.getElementById(elementId);
             if(!input) return;
-            
-            if (!window.html2canvas || !window.jspdf) { 
-                alert("Librerías PDF cargando... intenta de nuevo en unos segundos."); 
-                return; 
+
+            if (!window.html2canvas || !window.jspdf) {
+                showToast("Librerías PDF cargando... intentá de nuevo.", 'info');
+                return;
             }
 
             setLoadingPdf(true);
-            window.scrollTo(0, 0); 
+            window.scrollTo(0, 0);
 
             const clone = input.cloneNode(true);
-            
-            if (elementId === 'plantilla-print') {
-                 clone.style.width = "800px"; 
-                 const grid = clone.querySelector('.grid-responsive-fill');
-                 if(grid) { grid.style.display = 'block'; grid.style.gap = '0'; }
-                 const cards = clone.querySelectorAll('.relative.border');
-                 cards.forEach(c => { c.style.marginBottom = '20px'; c.style.border = '1px solid #ccc'; c.style.pageBreakInside = 'avoid'; });
-            } else if (elementId === 'reporte-ministerio') {
-                // Aumentar el ancho para que la tabla quepa mejor en el PDF
-                clone.style.width = "1200px"; 
-            } else {
-                 clone.style.width = "1000px"; 
+            const isReporte = elementId === 'reporte-ministerio';
+            const isPlantilla = elementId === 'plantilla-print';
+            const cloneWidth = isReporte ? 1200 : isPlantilla ? 800 : 1000;
+
+            clone.style.width = `${cloneWidth}px`;
+
+            if (isPlantilla) {
+                const grid = clone.querySelector('.grid-responsive-fill');
+                if(grid) { grid.style.display = 'block'; grid.style.gap = '0'; }
+                const cards = clone.querySelectorAll('.relative.border');
+                cards.forEach(c => { c.style.marginBottom = '20px'; c.style.border = '1px solid #ccc'; c.style.pageBreakInside = 'avoid'; });
             }
 
-            clone.style.position = "absolute"; clone.style.top = "-9999px"; clone.style.left = "0"; clone.style.background = "#ffffff"; clone.style.zIndex = "-1"; clone.style.padding = "20px";
-            clone.classList.remove('shadow', 'shadow-lg', 'shadow-md', 'rounded-lg', 'rounded'); clone.style.boxShadow = 'none'; clone.style.borderRadius = '0';
-            
+            clone.style.position = "absolute"; clone.style.top = "-9999px"; clone.style.left = "0";
+            clone.style.background = "#ffffff"; clone.style.zIndex = "-1"; clone.style.padding = "20px";
+            clone.classList.remove('shadow', 'shadow-lg', 'shadow-md', 'rounded-lg', 'rounded');
+            clone.style.boxShadow = 'none'; clone.style.borderRadius = '0';
+
             const elementsToRemove = clone.querySelectorAll('button, .no-print'); elementsToRemove.forEach(el => el.remove());
             const titles = clone.querySelectorAll('.print-title'); titles.forEach(el => { el.style.display = 'block'; el.classList.remove('hidden'); });
-            
+
             document.body.appendChild(clone);
 
             setTimeout(() => {
-                window.html2canvas(clone, { scale: 1.0, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1000, logging: false }).then((canvas) => {
-                    const imgData = canvas.toDataURL('image/jpeg', 0.70);
-                    const imgWidth = 210; const pageHeight = 295; const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                window.html2canvas(clone, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    windowWidth: cloneWidth,
+                    width: cloneWidth,
+                    logging: false
+                }).then((canvas) => {
                     const { jsPDF } = window.jspdf;
-                    const pdf = new jsPDF('p', 'mm', imgHeight > pageHeight ? [imgWidth, imgHeight + 20] : 'a4');
+                    // Reporte usa landscape, el resto portrait
+                    const orientation = isReporte ? 'l' : 'p';
+                    const pageW = isReporte ? 297 : 210;
+                    const pageH = isReporte ? 210 : 297;
+                    const imgWidth = pageW;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    const pdf = new jsPDF(orientation, 'mm', imgHeight > pageH ? [pageW, imgHeight + 10] : (isReporte ? 'a4' : 'a4'));
+                    const imgData = canvas.toDataURL('image/jpeg', 0.92);
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-                    
+
                     if (action === 'share') {
                         const pdfBlob = pdf.output('blob');
                         const file = new File([pdfBlob], `${filename}.pdf`, { type: 'application/pdf' });
@@ -281,14 +294,14 @@
                             navigator.share({ files: [file], title: filename, text: `Adjunto reporte: ${filename}`, }).catch(err => console.log('Error sharing:', err));
                         } else {
                             pdf.save(`${filename}.pdf`);
-                             window.open("https://web.whatsapp.com", "_blank");
-                             alert("Archivo descargado. Arrástralo a WhatsApp Web para enviarlo.");
+                            window.open("https://web.whatsapp.com", "_blank");
+                            showToast("Archivo descargado. Arrástralo a WhatsApp Web.");
                         }
                     } else {
                         pdf.save(`${filename}.pdf`);
                     }
                     document.body.removeChild(clone); setLoadingPdf(false);
-                }).catch(err => { console.error("Error PDF:", err); if(document.body.contains(clone)) document.body.removeChild(clone); setLoadingPdf(false); alert("Error al generar PDF: " + (err.message || err)); });
+                }).catch(err => { console.error("Error PDF:", err); if(document.body.contains(clone)) document.body.removeChild(clone); setLoadingPdf(false); showToast("Error al generar PDF: " + (err.message || err), 'error'); });
             }, 500);
         };
 
@@ -1315,7 +1328,7 @@
                             <h4 className="font-bold">Resultados ({resultados.length}):</h4>
                             <p className="text-sm text-gray-500 print-title font-semibold">{tituloReporte}</p>
                         </div>
-                        <div className="flex gap-2 no-print"><Button variant="secondary" onClick={copiarResultados} title="Copiar"><Clipboard/></Button><Button variant="primary" onClick={() => handleExportAction('resultados-busqueda', 'Resultados', 'share')} disabled={loadingPdf}>{loadingPdf ? '...' : 'Compartir PDF'}</Button><Button variant="primary" onClick={() => handleExportAction('resultados-busqueda', 'Resultados', 'download')} disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button></div>
+                        <div className="flex gap-2 no-print"><Button variant="secondary" onClick={copiarResultados} title="Copiar"><Clipboard/></Button><Button variant="primary" onClick={() => handleExportAction('resultados-busqueda', 'pediatria_resultados', 'share')} disabled={loadingPdf}>{loadingPdf ? '...' : 'Compartir PDF'}</Button><Button variant="primary" onClick={() => handleExportAction('resultados-busqueda', 'pediatria_resultados', 'download')} disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button></div>
                     </div>
                     <div className="w-scroll-container">
                         <table className="w-full text-sm border-collapse border">
@@ -1406,7 +1419,7 @@
                 );
                 return (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"><h3 className="text-xl font-bold mb-4">Configurar Base: {diasSemana[editingDay]}</h3><div className="grid grid-cols-2 gap-4"><div><h4 className="font-bold text-orange-600 mb-2">Turno Día</h4><TemplateSlot label="Médico 1" slotData={form.dia1} onChange={d => setForm({...form, dia1: d})} /><TemplateSlot label="Médico 2" slotData={form.dia2} onChange={d => setForm({...form, dia2: d})} /></div><div><h4 className="font-bold text-indigo-600 mb-2">Turno Noche</h4><TemplateSlot label="Médico 1" slotData={form.noche1} onChange={d => setForm({...form, noche1: d})} /><TemplateSlot label="Médico 2" slotData={form.noche2} onChange={d => setForm({...form, noche2: d})} /></div></div><div className="flex justify-end gap-2 mt-4 pt-4 border-t"><Button variant="secondary" onClick={() => setEditingDay(null)}>Cancelar</Button><Button onClick={guardar}>Guardar</Button></div></div></div>);
             };
-            return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><div className="flex gap-2"><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('plantilla-print', 'Plantilla_Base', 'download')} variant="primary" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : 'Descargar PDF'}</Button></div></div><div className="grid-responsive-fill">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
+            return ( <div className="space-y-6"><Card id="plantilla-print" className="p-8 bg-white"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-blue-800 flex items-center gap-2 text-xl"><LayoutTemplate /> Plantilla de Guardias Base</h3><div className="flex gap-2"><Button onClick={() => handleExportAction('plantilla-print', 'pediatria_plantilla_base', 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button><Button onClick={() => handleExportAction('plantilla-print', 'pediatria_plantilla_base', 'download')} variant="primary" className="text-sm" disabled={loadingPdf}>{loadingPdf ? 'Generando...' : 'Descargar PDF'}</Button></div></div><div className="grid-responsive-fill">{diasSemana.map((nombreDia, idxVisual) => { const realIdx = mapVisualToReal(idxVisual); const p = plantilla[realIdx]; const getName = (slot) => slot?.medicoId ? medicos.find(m=>String(m.id) === String(slot.medicoId))?.nombre : <span className="text-red-600 font-bold bg-red-100 px-1 rounded">VACANTE</span>; return ( <Card key={idxVisual} className="relative border border-gray-300 shadow-none"><div className="flex justify-between items-center mb-3 border-b pb-2"><h4 className="font-bold text-lg">{nombreDia}</h4><button onClick={() => setEditingDay(idxVisual)} className="text-blue-600 text-sm hover:underline font-medium no-print">Editar</button></div>{p ? (<div className="space-y-3 text-sm"><div><span className="text-xs font-bold text-orange-600 uppercase block mb-1">Día</span><div className="pl-2 border-l-4 border-orange-200"><div className="truncate text-gray-700">1. {getName(p.dia1)}</div><div className="truncate text-gray-700">2. {getName(p.dia2)}</div></div></div><div><span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Noche</span><div className="pl-2 border-l-4 border-indigo-200"><div className="truncate text-gray-700">1. {getName(p.noche1)}</div><div className="truncate text-gray-700">2. {getName(p.noche2)}</div></div></div></div>) : <div className="text-center py-8 text-gray-400 italic text-sm">Sin configurar</div>}</Card>); })}</div></Card>{editingDay !== null && <EditTemplateModal />}</div> );
         }
 
         function VistaReporte() {
@@ -1491,8 +1504,8 @@
                                 />
                             </div>
                             <div className="flex gap-2">
-                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}_${year}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
-                                <Button onClick={() => handleExportAction('reporte-ministerio', `Guardias_${mesNombre}_${year}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `pediatria_guardias_${mesNombre}_${year}`, 'share')} variant="whatsapp" disabled={loadingPdf} title="Enviar por WhatsApp">{loadingPdf ? '...' : 'WhatsApp'}</Button>
+                                <Button onClick={() => handleExportAction('reporte-ministerio', `pediatria_guardias_${mesNombre}_${year}`, 'download')} variant="primary" disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>
                             </div>
                         </div>
                         
