@@ -339,7 +339,13 @@
                 setShowPlantillaModal(false);
             };
 
-            const PlantillaModal = () => (
+            const PlantillaModal = () => {
+                useEffect(() => {
+                    const fn = (e) => { if (e.key === 'Escape') setShowPlantillaModal(false); };
+                    window.addEventListener('keydown', fn);
+                    return () => window.removeEventListener('keydown', fn);
+                }, []);
+                return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-lg p-6 w-full max-w-sm space-y-4 shadow-xl">
                         <h3 className="font-bold text-lg text-gray-800">Aplicar Plantilla</h3>
@@ -354,7 +360,8 @@
                         </div>
                     </div>
                 </div>
-            );
+                );
+            };
             const repetirSemanaAnterior = () => {
                 if (!confirm("¿Rellenar huecos con semana anterior?")) return;
                 const nuevas = {};
@@ -372,6 +379,11 @@
             };
             const EditGuardiaModal = () => {
                 if (!selectedDay) return null;
+                useEffect(() => {
+                    const fn = (e) => { if (e.key === 'Escape') setSelectedDay(null); };
+                    window.addEventListener('keydown', fn);
+                    return () => window.removeEventListener('keydown', fn);
+                }, []);
                 const fechaStr = new Date(year, month, selectedDay).toISOString().split('T')[0].slice(0, 10);
                 const defaultDia = { estado: 'VACANTE', tipoPago: 'SISTEMA' };
                 const guardiaActual = guardias[fechaStr] || { dia1: {...defaultDia}, dia2: {...defaultDia}, noche1: {...defaultDia}, noche2: {...defaultDia} };
@@ -395,10 +407,11 @@
                                 <select className="w-full mb-1 border" value={data.medicoId || ''} onChange={e => {
                                     const newMedicoId = e.target.value;
                                     const newMedico = medicos.find(m => String(m.id) === String(newMedicoId));
-                                    let newPrestadorId = data.prestadorId;
+                                    let newPrestadorId = '';
                                     if (newMedico && !newMedico.tieneRecibo) {
+                                        newPrestadorId = ''; // Sin recibo: necesita elegir prestador nuevo
                                     } else {
-                                        if (!data.derivado) newPrestadorId = ''; 
+                                        if (data.derivado) newPrestadorId = data.prestadorId;
                                     }
                                     onChangeSlot({...data, medicoId: newMedicoId, prestadorId: newPrestadorId});
                                 }}>
@@ -710,8 +723,10 @@
              const licenciasDelMes = licencias.filter(lic => lic.desde.startsWith(`${year}-${mesStr}`) || lic.hasta.startsWith(`${year}-${mesStr}`));
              const licenciasSiguienteMes = licencias.filter(lic => lic.desde.startsWith(`${nextYear}-${nextMesStr}`) || lic.hasta.startsWith(`${nextYear}-${nextMesStr}`));
 
-             const agregar = () => { 
-                if (!nueva.medicoId || !nueva.desde || !nueva.hasta) return alert("Faltan datos"); 
+             const agregar = () => {
+                if (!nueva.medicoId) return showToast('Seleccione un médico.', 'error');
+                if (!nueva.desde || !nueva.hasta) return showToast('Ingrese las fechas de inicio y fin.', 'error');
+                if (nueva.desde > nueva.hasta) return showToast('La fecha de inicio no puede ser posterior al fin.', 'error');
                 dbAgregarLicencia({ 
                     ...nueva, 
                     id: Date.now().toString(), 
@@ -731,10 +746,18 @@
                 setEditForm({ ...lic, detalleCobertura: lic.detalleCobertura || '' }); 
              };
 
-             const saveEdit = async () => { 
-                await dbAgregarLicencia(editForm); 
-                setEditingId(null); 
+             const saveEdit = async () => {
+                await dbAgregarLicencia(editForm);
+                setEditingId(null);
+                showToast('Licencia actualizada.');
              };
+
+             useEffect(() => {
+                if (!editingId) return;
+                const fn = (e) => { if (e.key === 'Escape') setEditingId(null); };
+                window.addEventListener('keydown', fn);
+                return () => window.removeEventListener('keydown', fn);
+             }, [editingId]);
 
              const RenderListaTarjetas = ({ titulo, lista, colorClass, icon: Icon }) => (
                 <div className={`${colorClass} p-4 rounded-lg shadow-sm border`}>
@@ -866,29 +889,7 @@
             );
         }
 
-        function VistaBusqueda() { 
-            if (mode === 'historialLicencias') {
-  if (!medicoId) return alert("Seleccione un médico");
-
-  const medico = medicos.find(m => String(m.id) === String(medicoId));
-  const nombre = medico ? medico.nombre : 'Médico';
-
-  const results = licencias
-    .filter(lic => String(lic.medicoId) === String(medicoId))
-    .sort((a, b) => a.desde.localeCompare(b.desde))
-    .map(lic => ({
-      motivo: lic.motivo,
-      desde: formatDateISO(lic.desde),
-      hasta: formatDateISO(lic.hasta),
-      detalle: lic.detalleCobertura || '',
-      coberturas: [] // preparado para PASO 3
-    }));
-
-  setTituloReporte(`Historial de Licencias – ${nombre}`);
-  setResultados(results);
-  return;
-}
- 
+        function VistaBusqueda() {
             const [mode, setMode] = useState('guardias'); const [fechaDesde, setFechaDesde] = useState(''); const [fechaHasta, setFechaHasta] = useState(''); const [medicoId, setMedicoId] = useState(''); const [resultados, setResultados] = useState(null);
              const [tituloReporte, setTituloReporte] = useState(''); 
              const [editingLicenciaId, setEditingLicenciaId] = useState(null); const [editLicenciaForm, setEditLicenciaForm] = useState({});
@@ -904,13 +905,40 @@
              // ------------------------------------
 
              const startEditLicencia = (lic) => { setEditingLicenciaId(lic.id); setEditLicenciaForm({ ...lic, reemplazoIds: lic.reemplazoIds || (lic.reemplazoId ? [lic.reemplazoId] : []), detalleCobertura: lic.detalleCobertura || '' }); };
-             const saveEditLicencia = async () => { await dbAgregarLicencia(editLicenciaForm); setEditingLicenciaId(null); const updated = resultados.map(r => r.id === editLicenciaForm.id ? { ...editLicenciaForm, medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre } : r); setResultados(updated); };
+             const saveEditLicencia = async () => { await dbAgregarLicencia(editLicenciaForm); setEditingLicenciaId(null); const updated = resultados.map(r => r.id === editLicenciaForm.id ? { ...editLicenciaForm, medicoNombre: medicos.find(m => String(m.id) === String(editLicenciaForm.medicoId))?.nombre } : r); setResultados(updated); showToast('Licencia actualizada.'); };
+
+             useEffect(() => {
+                if (!editingLicenciaId) return;
+                const fn = (e) => { if (e.key === 'Escape') setEditingLicenciaId(null); };
+                window.addEventListener('keydown', fn);
+                return () => window.removeEventListener('keydown', fn);
+             }, [editingLicenciaId]);
              
              const buscar = () => {
-                if(mode !== 'derivadas' && mode !== 'masivo' && (!fechaDesde || !fechaHasta)) return alert("Seleccione fechas");
+                if(mode !== 'derivadas' && mode !== 'masivo' && mode !== 'historialLicencias' && (!fechaDesde || !fechaHasta)) return showToast('Seleccione fechas de inicio y fin.', 'error');
 
                 let titulo = `Reporte`;
                 const results = [];
+
+                // --- MODO: HISTORIAL LICENCIAS ---
+                if (mode === 'historialLicencias') {
+                    if (!medicoId) return showToast('Seleccione un médico.', 'error');
+                    const medico = medicos.find(m => String(m.id) === String(medicoId));
+                    const nombre = medico ? medico.nombre : 'Médico';
+                    const historial = licencias
+                        .filter(lic => String(lic.medicoId) === String(medicoId))
+                        .sort((a, b) => a.desde.localeCompare(b.desde))
+                        .map(lic => ({
+                            motivo: lic.motivo,
+                            desde: formatDateISO(lic.desde),
+                            hasta: formatDateISO(lic.hasta),
+                            detalle: lic.detalleCobertura || '',
+                            coberturas: []
+                        }));
+                    setTituloReporte(`Historial de Licencias – ${nombre}`);
+                    setResultados(historial);
+                    return;
+                }
 
                 // --- NUEVO MODO: DERIVADAS ---
                 if (mode === 'derivadas') {
