@@ -712,6 +712,26 @@
              const [filtroLicencias, setFiltroLicencias] = useState('');
              const [editingId, setEditingId] = useState(null);
              const [editForm, setEditForm] = useState({});
+             const [historialMedicoId, setHistorialMedicoId] = useState('');
+             const [historialResultados, setHistorialResultados] = useState(null);
+             const [historialTitulo, setHistorialTitulo] = useState('');
+
+             const buscarHistorial = () => {
+                if (!historialMedicoId) return showToast('Seleccione un médico.', 'error');
+                const medico = medicos.find(m => String(m.id) === String(historialMedicoId));
+                const nombre = medico ? medico.nombre : 'Médico';
+                const resultados = licencias
+                    .filter(lic => String(lic.medicoId) === String(historialMedicoId))
+                    .sort((a, b) => a.desde.localeCompare(b.desde))
+                    .map(lic => ({
+                        motivo: lic.motivo,
+                        desde: formatDateISO(lic.desde),
+                        hasta: formatDateISO(lic.hasta),
+                        detalle: lic.detalleCobertura || ''
+                    }));
+                setHistorialTitulo(`Historial de Licencias – ${nombre}`);
+                setHistorialResultados(resultados);
+             };
              
              const { month, year } = getDaysInMonth(currentDate); 
              const mesStr = (month + 1).toString().padStart(2, '0'); 
@@ -851,6 +871,51 @@
                         </div>
                     </Card>
 
+                    {/* HISTORIAL POR MÉDICO */}
+                    <Card>
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search /> Historial de Licencias por Médico</h3>
+                        <div className="flex gap-4 items-end mb-4">
+                            <div className="flex-1">
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Médico</label>
+                                <select className="w-full p-2 border rounded" value={historialMedicoId} onChange={e => { setHistorialMedicoId(e.target.value); setHistorialResultados(null); }}>
+                                    <option value="">Seleccione un profesional...</option>
+                                    {medicosOrdenados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                </select>
+                            </div>
+                            <Button onClick={buscarHistorial}>Buscar</Button>
+                            {historialResultados && <Button variant="secondary" onClick={() => handleExportAction('historial-licencias-print', `pediatria_historial_licencias`, 'download')} disabled={loadingPdf}>{loadingPdf ? '...' : 'Descargar PDF'}</Button>}
+                        </div>
+                        {historialResultados && (
+                            <div id="historial-licencias-print">
+                                <div className="print-title hidden font-bold text-lg mb-4">{historialTitulo}</div>
+                                {historialResultados.length === 0 ? (
+                                    <p className="text-gray-500 italic">Sin licencias registradas para este médico.</p>
+                                ) : (
+                                    <table className="w-full text-sm border-collapse border">
+                                        <thead className="bg-gray-100">
+                                            <tr>
+                                                <th className="border p-2 text-left">Motivo</th>
+                                                <th className="border p-2 text-left">Desde</th>
+                                                <th className="border p-2 text-left">Hasta</th>
+                                                <th className="border p-2 text-left">Detalle</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {historialResultados.map((r, i) => (
+                                                <tr key={i} className="bg-white border-b">
+                                                    <td className="border p-2 font-medium">{r.motivo}</td>
+                                                    <td className="border p-2">{r.desde}</td>
+                                                    <td className="border p-2">{r.hasta}</td>
+                                                    <td className="border p-2 text-xs text-gray-600">{r.detalle}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        )}
+                    </Card>
+
                     {/* MODAL DE EDICIÓN */}
                     {editingId && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -915,30 +980,10 @@
              }, [editingLicenciaId]);
              
              const buscar = () => {
-                if(mode !== 'derivadas' && mode !== 'masivo' && mode !== 'historialLicencias' && (!fechaDesde || !fechaHasta)) return showToast('Seleccione fechas de inicio y fin.', 'error');
+                if(mode !== 'derivadas' && mode !== 'masivo' && (!fechaDesde || !fechaHasta)) return showToast('Seleccione fechas de inicio y fin.', 'error');
 
                 let titulo = `Reporte`;
                 const results = [];
-
-                // --- MODO: HISTORIAL LICENCIAS ---
-                if (mode === 'historialLicencias') {
-                    if (!medicoId) return showToast('Seleccione un médico.', 'error');
-                    const medico = medicos.find(m => String(m.id) === String(medicoId));
-                    const nombre = medico ? medico.nombre : 'Médico';
-                    const historial = licencias
-                        .filter(lic => String(lic.medicoId) === String(medicoId))
-                        .sort((a, b) => a.desde.localeCompare(b.desde))
-                        .map(lic => ({
-                            motivo: lic.motivo,
-                            desde: formatDateISO(lic.desde),
-                            hasta: formatDateISO(lic.hasta),
-                            detalle: lic.detalleCobertura || '',
-                            coberturas: []
-                        }));
-                    setTituloReporte(`Historial de Licencias – ${nombre}`);
-                    setResultados(historial);
-                    return;
-                }
 
                 // --- NUEVO MODO: DERIVADAS ---
                 if (mode === 'derivadas') {
@@ -1232,22 +1277,11 @@
                         <button onClick={() => {setMode('totales'); setResultados(null)}} className={`p-2 rounded border ${mode==='totales'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Resumen Totales</button>
                         <button onClick={() => {setMode('derivadas'); setResultados(null)}} className={`p-2 rounded border ${mode==='derivadas'?'bg-blue-100 border-blue-500':'bg-gray-50'}`}>Derivadas (No Cobradas)</button>
                         <button onClick={() => {setMode('masivo'); setResultados(null)}} className={`p-2 rounded border font-bold text-indigo-700 ${mode==='masivo'?'bg-indigo-100 border-indigo-500':'bg-gray-50'}`}>📄 Reportes Masivos</button>
-                        <button
-  onClick={() => { setMode('historialLicencias'); setResultados(null); }}
-  className={`p-2 rounded border ${
-    mode === 'historialLicencias'
-      ? 'bg-blue-100 border-blue-500'
-      : 'bg-gray-50'
-  }`}
->
-  Historial Licencias
-</button>
-
                     </div>
 
                     {/* CAMPOS DE FILTRO */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-gray-50 p-4 rounded">
-                        {(mode !== 'derivadas' && mode !== 'masivo') && (
+                        {(mode !== 'derivadas' && mode !== 'masivo' && mode !== 'historialLicencias') && (
                             <>
                                 <div><label className="text-xs font-bold text-gray-500">Desde</label><input type="date" className="w-full p-2 border rounded" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}/></div>
                                 <div><label className="text-xs font-bold text-gray-500">Hasta</label><input type="date" className="w-full p-2 border rounded" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}/></div>
@@ -1266,22 +1300,6 @@
                             </div>
                         )}
                         <Button onClick={buscar}>Buscar</Button>
-                        {mode === 'historialLicencias' && (
-  <div>
-    <label className="text-xs font-bold text-gray-500">Médico</label>
-    <select
-      className="w-full p-2 border rounded"
-      value={medicoId}
-      onChange={e => setMedicoId(e.target.value)}
-    >
-      <option value="">Seleccione...</option>
-      {medicosOrdenados.map(m => (
-        <option key={m.id} value={m.id}>{m.nombre}</option>
-      ))}
-    </select>
-  </div>
-)}
-
                     </div>
 
                     {/* MODO MASIVO */}
@@ -1359,15 +1377,6 @@
                     <div className="w-scroll-container">
                         <table className="w-full text-sm border-collapse border">
                             <thead className="bg-white">
-                                {mode === 'historialLicencias' && (
-  <tr>
-    <th className="border p-2">Motivo</th>
-    <th className="border p-2">Desde</th>
-    <th className="border p-2">Hasta</th>
-    <th className="border p-2">Detalle</th>
-  </tr>
-)}
-
                                 {mode === 'guardias' && <tr><th className="border p-2">Fecha</th><th className="border p-2">Turno</th><th className="border p-2">Tipo</th></tr>}
                                 {mode === 'licencias' && <tr><th className="border p-2">Médico</th><th className="border p-2">Motivo</th><th className="border p-2">Desde</th><th className="border p-2">Hasta</th><th className="border p-2">Acciones</th></tr>}
                                 {mode === 'totales' && <tr><th className="border p-2">Médico</th><th className="border p-2">Propias</th><th className="border p-2">Extras</th><th className="border p-2">Arreglos</th></tr>}
@@ -1413,15 +1422,6 @@
                                             <td className="border p-2 font-medium">{r.hizo}</td>
                                             <td className="border p-2 font-bold text-red-600">{r.recibo}</td>
                                             <td className="border p-2 text-xs">{r.tipo}</td>
-                                            {mode === 'historialLicencias' && (
-  <>
-    <td className="border p-2">{r.motivo}</td>
-    <td className="border p-2">{r.desde}</td>
-    <td className="border p-2">{r.hasta}</td>
-    <td className="border p-2 text-xs">{r.detalle}</td>
-  </>
-)}
-
                                         </>
                                     )}
                                 </tr>
